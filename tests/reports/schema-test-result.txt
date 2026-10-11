@@ -1,0 +1,1 @@
+372 valid tool definitions across 6 protocols and 12 captured requests (including local bridge tools).

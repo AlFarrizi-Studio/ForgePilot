@@ -1,0 +1,13 @@
+{
+  "source": "https://github.com/decolua/9router",
+  "commit": "ce4460ef79382bfddb4aa5fc0ff9f3cb0d5f95a8",
+  "providers": 82,
+  "categories": {
+    "apikey": 45,
+    "oauth": 21,
+    "free": 16
+  },
+  "logos": 75,
+  "allLogoBytesMatchUpstream": true,
+  "allAliasesMatchUpstream": true
+}
