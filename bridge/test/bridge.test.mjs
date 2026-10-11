@@ -124,7 +124,7 @@ test('dashboard authentication keeps its session cookie in the bridge', async t 
 });
 test('real HTTP stream relays split UTF-8/SSE bytes, terminal events and upstream errors', async t => {
   const upstream = http.createServer((req, res) => {
-    if (req.url === '/error') { res.writeHead(429, { 'Content-Type': 'application/json' }); res.end('{"error":"rate limited"}'); return; }
+    if (req.url === '/error') { res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '3', 'retry-after-ms': '3500', 'x-ratelimit-reset': '42', 'Set-Cookie': 'do-not-relay=secret' }); res.end('{"error":"rate limited"}'); return; }
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     const payload = Buffer.from('data: {"choices":[{"delta":{"content":"Halo 日本"}}]}\n\ndata: [DONE]\n\n');
     const split = payload.indexOf(Buffer.from('日')) + 1;
@@ -136,9 +136,15 @@ test('real HTTP stream relays split UTF-8/SSE bytes, terminal events and upstrea
   for (let n = 0; n < 20 && !done; n++) { const poll = await call(`/stream/${started.data.id}?cursor=${cursor}`); content += poll.data.events.map(e => e.chunk).join(''); cursor = poll.data.cursor; done = poll.data.done; assert.equal(poll.data.error, null); }
   assert.equal(done, true); assert.match(content, /Halo 日本/); assert.match(content, /data: \[DONE\]/); assert(!content.includes('�'));
   const failed = await call('/stream', { url: up + '/error', body: '{}', headers: {} });
-  let error;
-  for (let n = 0; n < 20; n++) { const poll = await call(`/stream/${failed.data.id}?cursor=0`); if (poll.data.done) { error = poll.data.error; break; } }
+  let error; let metadata;
+  for (let n = 0; n < 20; n++) { const poll = await call(`/stream/${failed.data.id}?cursor=0`); if (poll.data.done) { error = poll.data.error; metadata = poll.data; break; } }
   assert.match(error, /HTTP 429/);
+  assert.equal(metadata.statusCode, 429);
+  assert.equal(metadata.headers['retry-after'], '3');
+  assert.equal(metadata.headers['retry-after-ms'], '3500');
+  assert.equal(metadata.headers['x-ratelimit-reset'], '42');
+  assert.equal(metadata.headers['set-cookie'], undefined);
+  assert.deepEqual(JSON.parse(metadata.errorBody), { error: 'rate limited' });
 });
 test('cancelling a pending command kills its process and finishes the tool', async t => {
   const { call } = await setup(t, { fullAccess: true });

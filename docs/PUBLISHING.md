@@ -20,7 +20,7 @@ Jika repository sudah mempunyai commit, clone repository tersebut, salin perubah
 
 ## Release 3.5.0
 
-Tag: **v3.5.0**. Judul: **ForgePilot 3.5.0 — Separate Launchers & Chat Recovery**. Gunakan [RELEASE_NOTES.md](RELEASE_NOTES.md) sebagai deskripsi, lampirkan `ForgePilot-3.5.0.zip`, dan optionally `plugin/ForgePilot.rbxm` sebagai unduhan plugin saja.
+Tag: **v3.5.0**. Judul: **ForgePilot 3.5.0 — Icon, Sky Fix & Auto Retry**. Gunakan [RELEASE_NOTES.md](RELEASE_NOTES.md) sebagai deskripsi, lampirkan `ForgePilot-3.5.0.zip`, dan optionally `plugin/ForgePilot.rbxm` sebagai unduhan plugin saja. Untuk patch ini, timpa file attachment rilis v3.5.0 yang sudah ada; panduan plugin Store dan ikon tersedia di [patch dan cara timpa](PATCH_3.5.0.md).
 
 GitHub source archive otomatis memiliki perbedaan wrapper top-folder, tetapi path dalam repository tetap sama. Jalankan installer dari paket lengkap. RBXM saja dapat dipasang manual tetapi tidak berisi router/bridge.
 

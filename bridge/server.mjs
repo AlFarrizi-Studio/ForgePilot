@@ -328,9 +328,12 @@ export async function createBridge(options = {}) {
         for (const key of Object.keys(headers)) if (/^x-forgepilot-/i.test(key)) delete headers[key];
         const response = await fetcher(url, { method: 'POST', headers, body: body.body, signal: abort.signal, redirect: 'error' });
         job.statusCode = response.status;
+        // Only relay provider retry/request metadata; never relay cookies.
+        job.headers = Object.fromEntries([...response.headers].filter(([key]) => /^(retry-after(?:-ms)?|x-ratelimit-[\w-]+|ratelimit-[\w-]+|x-request-id|request-id)$/.test(key)));
         activity();
         if (!response.ok) {
           const message = (await bytes(response, MiB)).toString('utf8').slice(0, 2000);
+          job.errorBody = message;
           fail(`HTTP ${response.status}: ${message}`, response.status);
         }
         if (!(response.headers.get('content-type') ?? '').includes('text/event-stream')) fail('Provider did not return an SSE stream. Turn streaming off for this profile.');
@@ -407,7 +410,7 @@ export async function createBridge(options = {}) {
           if (job.events.length && cursor < job.events[0].cursor - 1) fail('Stream consumer fell behind; restart the request.', 409);
           if (job.cursor === cursor && !job.done) await new Promise(resolve => { const wake = () => { clearTimeout(timer); job.waiters.delete(wake); resolve(); }; const timer = setTimeout(wake, 800); job.waiters.add(wake); });
           const events = job.events.filter(e => e.cursor > cursor).slice(0, 128);
-          return send(res, 200, { events, activitySequence: job.activitySequence, cursor: events.at(-1)?.cursor ?? cursor, done: job.done && (events.at(-1)?.cursor ?? cursor) === job.cursor, error: job.error, statusCode: job.statusCode });
+          return send(res, 200, { events, activitySequence: job.activitySequence, cursor: events.at(-1)?.cursor ?? cursor, done: job.done && (events.at(-1)?.cursor ?? cursor) === job.cursor, error: job.error, statusCode: job.statusCode, headers: job.headers, errorBody: job.errorBody });
         }
       }
       if (req.method === 'POST' && ['/providers/open', '/providers/status', '/router/models'].includes(url.pathname)) {

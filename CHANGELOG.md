@@ -2,6 +2,27 @@
 
 ## 3.5.0 — 2026-10-11
 
+### Patch: provider menu freeze
+
+- Keep connection/capability diagnostics and unrelated retry events out of the agent state machine. Failed checks no longer leave provider settings locked.
+- Respect temporary diagnostic retry overrides: one request attempt, bounded timeout, and Stop control, without changing chat retry preferences.
+- Ignore late retry callbacks from completed/cancelled chats; show the reason for a genuine chat configuration lock and restore editing when cleanup finishes.
+- Close shared dropdown overlays when their owner is hidden, disabled, detached, destroyed, or its widget is closed.
+- Accept scheduled retries from active work states; verify chat recovery with the production retry subscription enabled.
+- Retain version **3.5.0** and rebuild both plugin formats. Add 31 regression checks; 729 Luau checks pass with no warnings.
+
+### Patch: plugin icon, Sky inspection, and Auto Retry
+
+- Add the original 512×512 ForgePilot PNG and reference the published plugin thumbnail from the toolbar and header, with a native header fallback.
+- Replace the invalid GetAncestors call with class inheritance checks; correctly serialize property values, false/zero values, tags, inherited Part fields, and Sky settings.
+- Route streaming failures through the same single retry controller as complete responses. Fix default sleep cancellation and numeric setting persistence; show Retry: On/Off in chat.
+- Add an OpenCode preset with 2-second doubling backoff, positive 25% jitter, a 30-second fallback cap, and five additional retries by default.
+- Preserve provider status/body/retry headers through the bridge; stop on permanent errors, cancel promptly during waits, and explain cooldowns exceeding the automatic limit.
+- Reset partial output and incomplete tool calls before retrying; keep useful partial output when recovery fails.
+- Keep package, plugin, bridge, and release version **3.5.0**. See the [patch and upgrade guide](docs/PATCH_3.5.0.md).
+
+### Existing 3.5.0 changes
+
 - Separate router/bridge launchers for Windows, macOS, and Linux; plugin-only installer.
 - Idle timeout across bridge, provider, and turn watchdog; partial-output recovery and explicit premature EOF.
 - Native Return submission fallback, Shift+Return newline, and Build default for new chats.

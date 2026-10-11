@@ -4,15 +4,35 @@ Tanggal verifikasi: 2026-10-11. Paket ini diuji secara lokal dengan data/account
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| Simulasi Luau pada module produksi | 659 pemeriksaan lulus; 0 kegagalan dan 0 warning |
+| Simulasi Luau pada module produksi | 729 pemeriksaan lulus; 0 kegagalan dan 0 warning |
 | Tes Node | 27 lulus; 16 bridge dan 11 runtime/installer |
-| Syntax Luau | 99 file compile tanpa error, termasuk harness yang dapat dibuat ulang |
+| Syntax Luau | 101 file compile tanpa error, termasuk harness yang dapat dibuat ulang |
 | Build plugin | RBXM dan RBXMX berhasil dibangun dengan Rojo |
 | Source hasil build XML | 88 script cocok dengan source: 1 main Script + 87 ModuleScript |
 | JSON Schema wire | 372 definisi valid pada 6 protokol / 12 request fixture |
 | POSIX wrapper | Syntax serta entry-point help Linux/macOS wrapper dijalankan pada Linux |
 | Katalog/logo | Snapshot 82 provider / 75 PNG; byte PNG upstream dipertahankan |
 | ZIP | CRC, byte comparison, checksum dan executable bits Unix diperiksa |
+
+## Patch menu provider
+
+- Regresi awal mereproduksi 15 kegagalan sebelum perbaikan, termasuk panel terkunci setelah tes gagal serta overlay dropdown tertinggal. Bukti ringkas ada di [provider-freeze-reproduction.json](../tests/reports/provider-freeze-reproduction.json).
+- Subscription RetryStateManager produksi diaktifkan selama pengujian. HTTP 401/429/503 pada tes koneksi dan kegagalan stream tidak mengambil state chat; kontrol editor kembali aktif.
+- Request diagnostik benar-benar memakai satu percobaan walaupun Auto Retry chat aktif. Preferensi retry pengguna tetap sama.
+- Agent runTask, stream controller, subscription retry, dan panel provider diuji bersama: HTTP 503 pulih setelah retry, state recovery tampil, run lock dilepas, dan teks thinking lama dibersihkan.
+- Event retry tanpa task ID, dari chat berbeda, sesudah completion, atau saat Stop tidak mengambil state tugas lain. Penguncian konfigurasi chat aktif dijelaskan di footer.
+- Menu beserta MenuDismiss ditutup saat editor disembunyikan, tombol dinonaktifkan, panel dilepas, widget ditutup, atau view dihancurkan.
+- 31 pemeriksaan tambahan lulus; hasil simulasi total 729 tanpa warning. Ini bukan pengujian interaksi native Studio.
+
+## Patch ikon, Sky dan Auto Retry
+
+- Reproduksi Lighting.Sky memakai API mock yang menolak metode invalid; properti Sky, tag, false/zero dan turunan Part dibaca dengan benar.
+- Pengendali retry memakai task.wait normal, mencoba ulang setelah jeda, dan berhenti saat Cancel tanpa menunggu cooldown panjang.
+- Preset OpenCode diuji terhadap urutan 2/4/8/16/30 detik, jitter positif, Retry-After dan fallback terbatas meskipun terdapat header lain.
+- Jalur sendTurn produksi memulihkan partial stream, EOF dan idle timeout tanpa duplikasi teks/reasoning atau tool call parsial.
+- Batas percobaan, retry disabled, error permanen HTTP/SSE dan pemulihan output parsial saat exhausted diuji.
+- Field angka Retry tersimpan pada key runtime ketika blur; shortcut chat mengikuti Enabled/Disabled; header memakai thumbnail dan native fallback.
+- HTTP bridge Node meneruskan status, body error, Retry-After, retry-after-ms dan reset header tanpa cookie upstream.
 
 ## Perilaku yang diperiksa
 

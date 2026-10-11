@@ -1,5 +1,7 @@
 # ForgePilot
 
+<p><img src="assets/ForgePilot-Icon-512.png" alt="ForgePilot" width="96" height="96"></p>
+
 **An AI assistant for Roblox Studio, with support for multiple providers and a local companion.**
 
 Inspect your place, edit Luau scripts, build scenes, and use external tools from one Studio panel. Choose your AI provider and connect the local bridge when your task needs web or file access.
@@ -8,7 +10,7 @@ Inspect your place, edit Luau scripts, build scenes, and use external tools from
 [![Node.js 22 or newer](https://img.shields.io/badge/Node.js-22%2B-339933)](https://nodejs.org/en/download/archive/v22)
 [![Roblox Studio plugin](https://img.shields.io/badge/Roblox_Studio-plugin-111827)](https://create.roblox.com/store/asset/82058489576798/ForgePilot)
 
-[Quick Start](#quick-start) · [Providers](#providers-and-authentication) · [How It Works](#how-it-works) · [Limitations](#capabilities-and-limitations) · [Documentation](#documentation)
+[Quick Start](#quick-start) · [Providers](#providers-and-authentication) · [Auto Retry](#auto-retry) · [How It Works](#how-it-works) · [Limitations](#capabilities-and-limitations) · [Documentation](#documentation)
 
 Repository: [AlFarrizi-Studio/ForgePilot](https://github.com/AlFarrizi-Studio/ForgePilot)
 
@@ -23,6 +25,7 @@ Repository: [AlFarrizi-Studio/ForgePilot](https://github.com/AlFarrizi-Studio/Fo
 - **Readable activity panels.** Thinking, tool calls, tool results, and web activity can be expanded or closed. Long results use a bounded scroll area.
 - **Provider logos and interface icons.** The package includes upstream provider images and native fallback icons for Thinking, Custom Provider, web, terminal, and tools.
 - **Keyboard controls.** Enter sends a chat message; Shift+Enter inserts a new line. The send button becomes Stop while the agent is working.
+- **Auto Retry.** Recover from temporary provider errors and interrupted streams, with a visible countdown, bounded retries, and an OpenCode preset. Open **Retry: On/Off** in chat to configure it.
 
 ## Quick Start
 
@@ -126,6 +129,33 @@ Plugin API keys and bridge tokens are kept for the current plugin session. Non-s
 
 See the [provider guide](docs/PROVIDERS.md) for authentication flows, model selection, and capability checks.
 
+## Auto Retry
+
+Auto Retry applies to both streaming and complete-response requests. Click **Retry: On/Off** beside **New chat**, or open **Settings → Retry**. The shortcut opens settings; the **Enable Auto Retry** switch controls whether requests are retried.
+
+The **OpenCode** preset uses a 2-second base delay, doubles the delay after each failure, adds up to 25% jitter, and caps local fallback waits at 30 seconds. New installations default to **5 additional retries**: at most 6 requests for one provider turn. Existing preferences are preserved; select **OpenCode** to use this preset after upgrading.
+
+| Failure | Behavior |
+| --- | --- |
+| HTTP 408/429, temporary 5xx errors, provider overload | Retry when classified as temporary |
+| Network disconnect, idle timeout, stream ending before completion | Retry the current provider turn |
+| Invalid credentials, permission, model, endpoint, or request | Report the failure without repeating it |
+| Roblox code error such as an invalid method | Requires a code fix; repeating an HTTP request cannot repair plugin code |
+| Provider wait exceeds **Maximum Automatic Wait** | Stop automatic recovery and show the required wait; default limit: 120 seconds |
+| User presses **Stop** or **Cancel Retry** | Cancel the countdown and prevent further attempts |
+
+Provider retry/reset headers and known cooldowns take priority over local backoff. The 30-second OpenCode cap does not shorten a required provider cooldown. Adaptive, Exponential, Linear, and Custom strategies remain available, together with per-provider overrides.
+
+The retry card shows the actual error category, attempt count, and countdown. A retry replaces partial text and reasoning from that provider turn. Incomplete tool calls are discarded before execution; completed build actions and earlier conversation turns are preserved. If all retries fail, useful partial output remains visible beside the error.
+
+Retries may consume provider quota or incur charges. They do not replenish credits, bypass account limits, guarantee a successful response, or replay already completed tools. See the [3.5.0 patch and upgrade guide](docs/PATCH_3.5.0.md) for overwrite installation and publishing instructions.
+
+### Provider settings and diagnostics
+
+Connection, streaming, tool, and capability tests keep their status separate from chat. Diagnostic requests use one attempt, a maximum 15-second request timeout, and a 60-second operation deadline. **Stop test** cancels an active check. Errors, cancellation, and timeouts release the editor controls without changing your chat retry preferences.
+
+While a chat task is running, the provider footer explains that configuration is temporarily locked. Editing becomes available when the task and its cleanup finish. Dropdowns close when their panel is hidden, disabled, detached, or destroyed, including when the plugin widget is closed.
+
 ## How It Works
 
 | Component | Responsibility |
@@ -195,11 +225,14 @@ Follow [CONTRIBUTING.md](CONTRIBUTING.md) for Luau verification and rebuilding t
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Limits, errors, and recovery |
 | [Test Report](docs/TEST-REPORT.md) | Automated checks and verification scope |
 | [Release Notes](docs/RELEASE_NOTES.md) | Changes in the packaged release |
+| [3.5.0 Patch and Upgrade](docs/PATCH_3.5.0.md) | Provider menu fixes, icon, Sky fix, Auto Retry, and overwrite instructions |
 | [Changelog](CHANGELOG.md) | Version history |
 
-This README is in English. The detailed guides are currently in Indonesian.
+This README and the 3.5.0 patch guide are in English. Other detailed guides are currently in Indonesian.
 
 ## Acknowledgements and Licensing
+
+The retry preset follows the [OpenCode retry implementation](https://github.com/anomalyco/opencode/blob/c789868/packages/opencode/src/session/retry.ts), with a bounded fallback wait and ForgePilot cancellation controls.
 
 The provider catalog and 75 original provider PNGs come from the referenced 9router snapshot. Its upstream MIT license is retained in [`assets/9router-LICENSE.txt`](assets/9router-LICENSE.txt). Provider names and logos belong to their respective owners.
 
