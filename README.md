@@ -4,9 +4,9 @@
 
 Inspect your place, edit Luau scripts, build scenes, and use external tools from one Studio panel. Choose your AI provider and connect the local bridge when your task needs web or file access.
 
-![Version 3.5.0](https://img.shields.io/badge/version-3.5.0-2563eb)
-![Node.js 22 or newer](https://img.shields.io/badge/Node.js-22%2B-339933)
-![Roblox Studio plugin](https://img.shields.io/badge/Roblox_Studio-plugin-111827)
+[![Version 3.5.0](https://img.shields.io/badge/version-3.5.0-2563eb)](https://github.com/AlFarrizi-Studio/ForgePilot/releases/tag/v3.5.0)
+[![Node.js 22 or newer](https://img.shields.io/badge/Node.js-22%2B-339933)](https://nodejs.org/en/download/archive/v22)
+[![Roblox Studio plugin](https://img.shields.io/badge/Roblox_Studio-plugin-111827)](https://create.roblox.com/store/asset/82058489576798/ForgePilot)
 
 [Quick Start](#quick-start) · [Providers](#providers-and-authentication) · [How It Works](#how-it-works) · [Limitations](#capabilities-and-limitations) · [Documentation](#documentation)
 
@@ -29,7 +29,7 @@ Repository: [AlFarrizi-Studio/ForgePilot](https://github.com/AlFarrizi-Studio/Fo
 ### 1. Check the requirements
 
 - Roblox Studio on Windows or macOS. Linux launchers are included for an existing, working Wine/Vinegar installation; there is no official native Linux Studio build.
-- [Node.js 22 or newer](https://nodejs.org/), including npm and npx, for the installer and local services.
+- [Node.js 22 or newer](https://nodejs.org/en/download/archive/v22), including npm and npx, for the installer and local services.
 - An internet connection for the initial 9router download and online AI providers.
 - An account or API key for your selected provider, when required.
 
