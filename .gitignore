@@ -1,0 +1,14 @@
+node_modules/
+AgentWorkspace/
+ForgePilotWorkspace/
+.forgepilot-backups/
+.env
+.env.*
+*.log
+*.zip
+releases/
+.DS_Store
+Thumbs.db
+__pycache__/
+tests/luau/runtime-harness.luau
+tests/luau/runtime-result.txt
