@@ -1,0 +1,13 @@
+{
+  "name": "forgepilot-local-bridge",
+  "version": "3.5.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node ../runtime/bridge.mjs",
+    "test": "node --test test/*.test.mjs"
+  }
+}

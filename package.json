@@ -1,0 +1,17 @@
+{
+  "name": "forgepilot",
+  "version": "3.5.0",
+  "private": true,
+  "type": "module",
+  "description": "Roblox Studio AI agent with a cross-platform local companion",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node runtime/bridge.mjs",
+    "start:bridge": "node runtime/bridge.mjs",
+    "start:router": "node runtime/router.mjs",
+    "install:plugin": "node runtime/install.mjs",
+    "test": "node --test bridge/test/bridge.test.mjs runtime/test/runtime.test.mjs"
+  }
+}
