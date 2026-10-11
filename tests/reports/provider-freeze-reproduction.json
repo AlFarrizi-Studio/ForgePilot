@@ -1,0 +1,32 @@
+{
+  "environment": "Deterministic Luau engine simulation; native Roblox Studio not exercised",
+  "before_fix": {
+    "failed_checks": 15,
+    "warning_count": 15,
+    "failures": [
+      "failed provider diagnostics do not own the agent state",
+      "failed connection test unlocks the entire provider editor",
+      "diagnostic errors do not become chat thinking text",
+      "diagnostic HTTP 429 uses one attempt despite enabled chat retry",
+      "diagnostic HTTP 429 restores provider editing",
+      "diagnostic HTTP 503 uses one attempt despite enabled chat retry",
+      "diagnostic HTTP 503 restores provider editing",
+      "diagnostic retry overrides reach the production request controller",
+      "provider probe cannot replace an active chat state",
+      "stale retry events cannot replace the current chat",
+      "finished chat clears retry thinking text",
+      "provider footer explains a real chat configuration lock",
+      "hiding provider editor removes its invisible input blocker",
+      "disabling a menu owner removes its input blocker",
+      "detaching a provider view removes shared menu overlays"
+    ]
+  },
+  "after_fix": {
+    "total_passed": 729,
+    "failed_checks": 0,
+    "warning_count": 0,
+    "additional_checks": 31
+  },
+  "test": "tests/luau/provider_freeze_regression_tests.luau",
+  "version": "3.5.0"
+}

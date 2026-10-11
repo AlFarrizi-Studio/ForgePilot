@@ -148,6 +148,8 @@ function newInstance(class)
 end
 function methods:IsA(target) return isa(self._class,target) end
 function methods:GetChildren() return table.clone(self._children) end
+function methods:GetTags() return table.clone(self._tags or {}) end
+function methods:AddTag(tag) self._tags=self._tags or {};if not table.find(self._tags,tag) then self._tags[#self._tags+1]=tag end end
 function methods:GetDescendants() local list={};local function walk(node) for _,child in node._children do list[#list+1]=child;walk(child) end end;walk(self);return list end
 function methods:FindFirstChild(name,recursive) for _,child in self._children do if child.Name==name then return child end end;if recursive then for _,child in self._children do local found=methods.FindFirstChild(child,name,true);if found then return found end end end;return nil end
 function methods:WaitForChild(name) return methods.FindFirstChild(self,name) end

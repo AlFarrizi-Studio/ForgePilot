@@ -47,7 +47,9 @@ do
   callbacks.onChunk('data: '..jsonEncode({choices={{delta={content='partial'}}}})..'\n\n');closed=true
   return {isDone=function()return closed end,cancel=function()closed=true end}
  end
+ local retrySettings=module('Core/SmartRetrySettings');local previousEnabled=retrySettings.get('enabled');retrySettings.set('enabled',false)
  Provider.stream(profile,spec,'fixture-key',{onDone=function(value)done=value end,onError=function(value)failure=value end})
+ retrySettings.set('enabled',previousEnabled)
  check('unexpected provider EOF is an error instead of a silent success',done==nil and failure and failure.message:find('completion marker',1,true)~=nil)
  HTTP.stream=previousHTTP
  Provider.stream=function(_,_,_,callbacks)

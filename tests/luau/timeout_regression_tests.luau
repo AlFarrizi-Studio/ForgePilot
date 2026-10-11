@@ -6,6 +6,10 @@ do
  local HTTP=module('Utilities/UniversalHTTPClient')
  local Streaming=module('AI/StreamingManager')
  local Registry=module('AI/UniversalProviderRegistry')
+ local Smart=module('Core/SmartRetrySettings');local retryEnabled=Smart.get('enabled')
+ -- These cases test single-attempt transport cleanup; recovery is exercised
+ -- separately with Auto Retry enabled in patch_regression_tests.
+ Smart.set('enabled',false)
  local previousRequest=methods.RequestAsync
  local previousStream=HTTP.stream
  local mode='callback';local polls=0;local supportsJobs=true
@@ -97,5 +101,6 @@ do
  client.Error:Fire(500,'late error');client.Closed:Fire()
  check('late native events cannot re-close failed stream',closes==1)
  methods.CreateWebStreamClient=originalNative;HTTP.resetCapabilityCache()
+ Smart.set('enabled',retryEnabled)
 end)()
 end

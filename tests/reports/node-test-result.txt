@@ -2,33 +2,33 @@
 > forgepilot@3.5.0 test
 > node --test bridge/test/bridge.test.mjs runtime/test/runtime.test.mjs
 
-✔ pairing, origin protection, host validation and exact mode checks (82.102534ms)
-✔ real text read, directory listing, search, backup, exact editing and conflict guard (29.931245ms)
-✔ workspace boundary catches absolute, traversal and symlink/junction escapes (12.041492ms)
-✔ full access permits explicit outside paths and returns actual command exit/output (140.98744ms)
-✔ network fetch, HTML reference extraction, literal search URLs and binary download verification (17.325531ms)
-✔ search challenge and missing results produce an explicit failure (4.161061ms)
-✔ OAuth opens actual provider dashboard, checks active connections and filters account models (17.468141ms)
-✔ dashboard authentication keeps its session cookie in the bridge (8.535848ms)
-✔ real HTTP stream relays split UTF-8/SSE bytes, terminal events and upstream errors (39.587637ms)
-✔ cancelling a pending command kills its process and finishes the tool (87.321577ms)
-✔ async tool jobs answer immediately and keep health responsive during a command (221.587657ms)
-✔ a stalled async tool settles after its deadline and leaves the bridge usable (45.83007ms)
-✔ async command cancellation settles the job and kills its running process (12.712427ms)
-✔ a never-ending SSE upstream times out and permits a later request (1013.154713ms)
-✔ an active upstream SSE stream outlives the configured idle timeout (1461.418923ms)
-✔ sensitive tool requests are refused before file or command execution (7.916905ms)
-✔ separate launcher options are strict and bridge defaults to full access (1.908347ms)
-✔ bridge starts without 9router and never starts a router child (51.56907ms)
-✔ router launcher owns only its child and does not require a workspace or bridge (76.935098ms)
-✔ stopping either service leaves the other service responsive (158.769806ms)
-✔ an existing router is reused and survives router launcher shutdown (3.938222ms)
-✔ router startup timeout cleans its child and does not hang (108.546656ms)
-✔ cancelling first-run router startup stops only its spawned child (47.007132ms)
-✔ a crashing router fails startup immediately (62.387788ms)
-✔ installer finds Windows, macOS and Linux Wine/Vinegar plugin folders (7.166787ms)
-✔ installer verifies bytes, backs up both plugin variants, and copies only the plugin (12.220055ms)
-✔ installer failure before replacement keeps the original plugin intact (8.302173ms)
+✔ pairing, origin protection, host validation and exact mode checks (89.875479ms)
+✔ real text read, directory listing, search, backup, exact editing and conflict guard (36.704605ms)
+✔ workspace boundary catches absolute, traversal and symlink/junction escapes (13.684332ms)
+✔ full access permits explicit outside paths and returns actual command exit/output (152.057183ms)
+✔ network fetch, HTML reference extraction, literal search URLs and binary download verification (19.631827ms)
+✔ search challenge and missing results produce an explicit failure (4.677218ms)
+✔ OAuth opens actual provider dashboard, checks active connections and filters account models (13.778822ms)
+✔ dashboard authentication keeps its session cookie in the bridge (5.094965ms)
+✔ real HTTP stream relays split UTF-8/SSE bytes, terminal events and upstream errors (43.56707ms)
+✔ cancelling a pending command kills its process and finishes the tool (88.448065ms)
+✔ async tool jobs answer immediately and keep health responsive during a command (224.7007ms)
+✔ a stalled async tool settles after its deadline and leaves the bridge usable (46.324431ms)
+✔ async command cancellation settles the job and kills its running process (11.509275ms)
+✔ a never-ending SSE upstream times out and permits a later request (1009.282277ms)
+✔ an active upstream SSE stream outlives the configured idle timeout (1466.848516ms)
+✔ sensitive tool requests are refused before file or command execution (10.026009ms)
+✔ separate launcher options are strict and bridge defaults to full access (1.897824ms)
+✔ bridge starts without 9router and never starts a router child (48.942369ms)
+✔ router launcher owns only its child and does not require a workspace or bridge (92.18176ms)
+✔ stopping either service leaves the other service responsive (165.833436ms)
+✔ an existing router is reused and survives router launcher shutdown (6.260106ms)
+✔ router startup timeout cleans its child and does not hang (110.340091ms)
+✔ cancelling first-run router startup stops only its spawned child (48.530991ms)
+✔ a crashing router fails startup immediately (71.916643ms)
+✔ installer finds Windows, macOS and Linux Wine/Vinegar plugin folders (6.410088ms)
+✔ installer verifies bytes, backs up both plugin variants, and copies only the plugin (11.333855ms)
+✔ installer failure before replacement keeps the original plugin intact (4.449111ms)
 ℹ tests 27
 ℹ suites 0
 ℹ pass 27
@@ -36,4 +36,4 @@
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 3294.485547
+ℹ duration_ms 3331.960413
