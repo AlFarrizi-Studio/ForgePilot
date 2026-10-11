@@ -12,6 +12,8 @@ Inspect your place, edit Luau scripts, build scenes, and use external tools from
 
 Repository: [AlFarrizi-Studio/ForgePilot](https://github.com/AlFarrizi-Studio/ForgePilot)
 
+Roblox Assets Plugin: [ForgePilot](https://create.roblox.com/store/asset/82058489576798/ForgePilot)
+
 ## Features
 
 - **Chat inside Studio.** Text and supported reasoning appear as provider data arrives, without a typing queue after the response finishes.
