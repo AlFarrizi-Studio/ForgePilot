@@ -6,13 +6,11 @@ Inspect your place, edit Luau scripts, build scenes, and use external tools from
 
 ![Version 3.5.0](https://img.shields.io/badge/version-3.5.0-2563eb)
 ![Node.js 22 or newer](https://img.shields.io/badge/Node.js-22%2B-339933)
-![Roblox Studio plugin](https://img.shields.io/badge/Roblox_Studio-plugin-111827)
+![Roblox Studio plugin](https://create.roblox.com/store/asset/82058489576798/ForgePilot)
 
 [Quick Start](#quick-start) · [Providers](#providers-and-authentication) · [How It Works](#how-it-works) · [Limitations](#capabilities-and-limitations) · [Documentation](#documentation)
 
 Repository: [AlFarrizi-Studio/ForgePilot](https://github.com/AlFarrizi-Studio/ForgePilot)
-
-Roblox Assets Plugin: [ForgePilot](https://create.roblox.com/store/asset/82058489576798/ForgePilot)
 
 ## Features
 
