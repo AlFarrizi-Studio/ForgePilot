@@ -26,7 +26,7 @@ local RetryDelayCalculator = {}
 -- TYPES
 --=============================================================================
 
-export type Strategy = "adaptive" | "linear" | "exponential" | "custom"
+export type Strategy = "opencode" | "adaptive" | "linear" | "exponential" | "custom"
 
 export type Config = {
 	enabled: boolean,
@@ -60,6 +60,8 @@ export type Source =
 	| "none"
 
 export type Decision = {
+	category: string?,
+	message: string?,
 	delaySeconds: number,
 	source: Source,
 	--- True when the wait is a provider requirement rather than our own choice.
@@ -72,7 +74,7 @@ export type Decision = {
 
 local DEFAULT_CONFIG: Config = {
 	enabled = true,
-	strategy = "adaptive",
+	strategy = "opencode",
 	maxRetries = 5,
 	initialDelaySeconds = 2,
 	multiplier = 2,
@@ -151,7 +153,7 @@ function RetryDelayCalculator.fromSettings(settings: any, providerId: string?): 
 
 	config.enabled = if type(settings.enabled) == "boolean" then settings.enabled else true
 	local strategy = settings.strategy
-	if strategy == "adaptive" or strategy == "linear" or strategy == "exponential" or strategy == "custom" then
+	if strategy == "opencode" or strategy == "adaptive" or strategy == "linear" or strategy == "exponential" or strategy == "custom" then
 		config.strategy = strategy
 	end
 
@@ -413,6 +415,7 @@ export type CalculateInput = {
 	body: string?,
 	--- Cooldown already established by ProviderRateLimitScheduler, in seconds.
 	cooldownSeconds: number?,
+	cooldownEstimated: boolean?,
 	--- Remaining time in the tracked sliding window, in seconds.
 	windowWaitSeconds: number?,
 	now: number,
@@ -427,12 +430,13 @@ function RetryDelayCalculator.calculate(input: CalculateInput): Decision
 	local candidates: { { seconds: number, source: Source, mandatory: boolean, estimated: boolean } } = {}
 
 	-- 1. Provider cooldown already established.
-	if config.dynamicCooldown and type(input.cooldownSeconds) == "number" and input.cooldownSeconds > 0 then
+	if config.dynamicCooldown and type(input.cooldownSeconds) == "number" and input.cooldownSeconds > 0
+		and not (config.strategy == "opencode" and input.cooldownEstimated == true) then
 		candidates[#candidates + 1] = {
 			seconds = input.cooldownSeconds,
 			source = "provider_cooldown",
-			mandatory = true,
-			estimated = false,
+			mandatory = input.cooldownEstimated ~= true,
+			estimated = input.cooldownEstimated == true,
 		}
 	end
 
@@ -518,10 +522,15 @@ function RetryDelayCalculator.calculate(input: CalculateInput): Decision
 			}
 		else
 			-- 7. Error-specific fallback, then 8. backoff.
-			local fallback = RetryDelayCalculator.categoryFallback(input.category)
+			local fallback = if config.strategy == "opencode" then 0 else RetryDelayCalculator.categoryFallback(input.category)
 			local backoff: number
 			local backoffSource: Source
-			if config.strategy == "linear" then
+			if config.strategy == "opencode" then
+				-- OpenCode reference: 2s base, doubling, positive 25% jitter.
+				-- Keep the fallback bounded even when unrelated headers exist.
+				backoff = math.min(30, 2 * 2 ^ (attempt - 1))
+				backoffSource = "exponential_backoff"
+			elseif config.strategy == "linear" then
 				backoff = RetryDelayCalculator.linear(attempt, config)
 				backoffSource = "linear_backoff"
 			elseif config.strategy == "custom" then
@@ -556,8 +565,14 @@ function RetryDelayCalculator.calculate(input: CalculateInput): Decision
 	local delay = chosen.seconds
 	if not chosen.mandatory then
 		delay = math.min(delay, config.maxDelaySeconds)
-		delay = RetryDelayCalculator.applyJitter(delay, config.jitterPercent, input.random)
-		delay = math.min(delay, config.maxDelaySeconds)
+		if config.strategy == "opencode" and chosen.source == "exponential_backoff" then
+			local random = input.random or math.random
+			delay *= 1 + 0.25 * math.clamp(random(), 0, 1)
+			delay = math.min(delay, config.maxDelaySeconds, 30)
+		else
+			delay = RetryDelayCalculator.applyJitter(delay, config.jitterPercent, input.random)
+			delay = math.min(delay, config.maxDelaySeconds)
+		end
 	end
 
 	local exceeds = delay > config.maxAutoWaitSeconds

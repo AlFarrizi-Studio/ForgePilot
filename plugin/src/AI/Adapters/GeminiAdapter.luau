@@ -341,7 +341,7 @@ function Adapter.parseStreamChunk(state: any, chunk: string): { AdapterTypes.Res
 		end
 
 		if type(decoded.error) == "table" then
-			events[#events + 1] = { kind = "error", message = tostring(decoded.error.message or "Gemini stream error.") }
+			events[#events + 1] = { kind = "error", message = tostring(decoded.error.message or "Gemini stream error."), body = data }
 		end
 	end
 

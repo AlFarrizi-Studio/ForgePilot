@@ -337,6 +337,7 @@ function Adapter.parseStreamChunk(state: any, chunk: string): { AdapterTypes.Res
 			events[#events + 1] = {
 				kind = "error",
 				message = tostring(err.message or "Anthropic stream error."),
+				body = data,
 			}
 		end
 	end

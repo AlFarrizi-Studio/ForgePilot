@@ -139,7 +139,7 @@ local function defaultSettings(): Settings
 		reserveTokensForTools = 4096,
 		smartRetry = {
 			enabled = true,
-			strategy = "adaptive",
+			strategy = "opencode",
 			maxRetries = 5,
 			initialDelaySeconds = 2,
 			multiplier = 2,

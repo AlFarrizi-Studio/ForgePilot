@@ -134,6 +134,13 @@ local SAFE_PROPERTIES: { [string]: { [string]: any } } = {
 	},
 	Part = { Shape = true, Size = true },
 	Model = { PrimaryPart = "InstanceRef" },
+	Sky = {
+		SkyboxBk = true, SkyboxDn = true, SkyboxFt = true,
+		SkyboxLf = true, SkyboxRt = true, SkyboxUp = true,
+		SkyboxOrientation = true, CelestialBodiesShown = true,
+		StarCount = true, SunAngularSize = true, MoonAngularSize = true,
+		SunTextureId = true, MoonTextureId = true,
+	},
 	Lighting = {
 		Ambient = true,
 		OutdoorAmbient = true,
@@ -187,35 +194,34 @@ function WorkspaceInspector.readProperties(instance: Instance): { [string]: stri
 	end
 
 	-- Universal, always-safe attributes.
-	local always = { Name = true, ClassName = true, Archivable = true, Tags = true }
-	for key, value in always do
-		local ok, result = tryRead(instance, key)
-		if ok then
-			out[key] = serialiseValue(result)
+	for _, key in { "Name", "ClassName", "Archivable" } do
+		local value, readError = tryRead(instance, key)
+		if readError == nil then
+			out[key] = serialiseValue(value)
 		end
 	end
-
-	local classRules = SAFE_PROPERTIES[instance.ClassName]
-	if not classRules then
-		for ancestor in instance:GetAncestors() do
-			classRules = SAFE_PROPERTIES[ancestor.ClassName]
-			if classRules then
-				break
-			end
-		end
+	local tagsOk, tags = pcall(instance.GetTags, instance)
+	if tagsOk then
+		table.sort(tags)
+		out.Tags = table.concat(tags, ", ")
 	end
 
-	if classRules then
-		local count = 0
-		for property in pairs(classRules) do
-			if count >= LIMITS.MAX_PROPERTIES then
-				break
-			end
-			local ok, value = tryRead(instance, property)
-			if ok then
-				out[property] = serialiseValue(value)
-				count += 1
-			end
+	-- IsA follows class inheritance. An object's Parent is unrelated to the
+	-- properties it supports (a Sky under Lighting is still a Sky).
+	local classRules: { [string]: boolean } = {}
+	for className, properties in SAFE_PROPERTIES do
+		if instance:IsA(className) then
+			for property in properties do classRules[property] = true end
+		end
+	end
+	local names = {}
+	for property in classRules do names[#names + 1] = property end
+	table.sort(names)
+	for index, property in names do
+		if index > LIMITS.MAX_PROPERTIES then break end
+		local value, readError = tryRead(instance, property)
+		if readError == nil then
+			out[property] = serialiseValue(value)
 		end
 	end
 
@@ -280,8 +286,8 @@ function WorkspaceInspector.describeLighting(): { [string]: string }
 	local lighting = game:GetService("Lighting")
 	local properties = SAFE_PROPERTIES.Lighting
 	for property in pairs(properties) do
-		local ok, value = tryRead(lighting, property)
-		if ok then
+		local value, readError = tryRead(lighting, property)
+		if readError == nil then
 			out[property] = serialiseValue(value)
 		end
 	end

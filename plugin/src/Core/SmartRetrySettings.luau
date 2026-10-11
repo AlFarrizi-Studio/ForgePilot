@@ -8,6 +8,7 @@
 ]]
 
 local SettingsManager = require(script.Parent.SettingsManager)
+local EventBus = require(script.Parent.EventBus)
 
 local SmartRetry = {}
 
@@ -38,8 +39,8 @@ local function block(): any
 end
 
 --- Reads a retry setting.
-function SmartRetry.get(key: string): any
-	return block()[key]
+function SmartRetry.get(key: string?): any
+	return if key == nil then block() else block()[key]
 end
 
 --- Writes a retry setting, clamping numeric values and validating enums.
@@ -64,7 +65,7 @@ function SmartRetry.set(key: string, value: any)
 	then
 		coerced = value == true
 	elseif key == "strategy" then
-		local valid = { adaptive = true, exponential = true, linear = true, custom = true }
+		local valid = { opencode = true, adaptive = true, exponential = true, linear = true, custom = true }
 		if not valid[value] then
 			return false
 		end
@@ -88,6 +89,7 @@ function SmartRetry.set(key: string, value: any)
 
 	block()[key] = coerced
 	SettingsManager.persist()
+	EventBus.emit(EventBus.Events.RetrySettingsChanged, { key = key })
 	return true
 end
 
@@ -95,7 +97,7 @@ end
 --- dependent on the settings template being re-seeded.
 local DEFAULTS: { [string]: any } = {
 	enabled = true,
-	strategy = "adaptive",
+	strategy = "opencode",
 	maxRetries = 5,
 	initialDelaySeconds = 2,
 	multiplier = 2,
@@ -122,6 +124,7 @@ function SmartRetry.resetDefaults()
 	end
 	settings.smartRetry = fresh
 	SettingsManager.persist()
+	EventBus.emit(EventBus.Events.RetrySettingsChanged, { reset = true })
 	return true
 end
 
@@ -167,6 +170,7 @@ function SmartRetry.setProviderOverride(providerId: string, patch: { [string]: a
 	end
 
 	SettingsManager.persist()
+	EventBus.emit(EventBus.Events.RetrySettingsChanged, { providerId = providerId })
 	return true
 end
 
@@ -183,13 +187,16 @@ end
 
 --- A one-line human description of the current schedule.
 function SmartRetry.describe(): string
-	local strategy = block().strategy or "adaptive"
+	local strategy = block().strategy or "opencode"
 	local maxRetries = block().maxRetries or 5
 	local initial = block().initialDelaySeconds or 2
 	local multiplier = block().multiplier or 2
 
 	if not block().enabled then
 		return "Automatic retry is disabled."
+	end
+	if strategy == "opencode" then
+		return string.format("OpenCode: 2s base, x2, up to 25%% extra jitter, 30s fallback cap; up to %d retries. Provider cooldowns are respected.", maxRetries)
 	end
 
 	if strategy == "linear" then

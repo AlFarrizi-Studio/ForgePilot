@@ -498,6 +498,12 @@ function AgentController.sendTurn(profile: any, spec: any, taskId: string, callb
 		apiKey = CredentialStore.get(profile.id),
 		taskId = taskId,
 		operationId = taskId,
+		onReset = function()
+			result.text = ""
+			result.reasoning = nil
+			result.toolCalls = {}
+			if callbacks.onReset then callbacks.onReset() end
+		end,
 		onText = function(delta)
 			result.text ..= delta
 			if callbacks.onDelta then
@@ -655,6 +661,10 @@ local function runTaskImpl(options: {
 		ContextManager.setPendingEstimate(flatText)
 
 		local turn = AgentController.sendTurn(profile, spec, taskId, {
+			onReset = function()
+				SessionManager.updateMessage(message.id, { content = "", reasoning = "", streaming = true })
+			end,
+			onAttempt = options.onRetryAttempt,
 			onDelta = function(delta, channel)
 				SessionManager.appendToMessage(message.id, delta, channel)
 				if options.onDelta then

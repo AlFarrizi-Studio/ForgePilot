@@ -186,7 +186,18 @@ function ProviderService.getRetryConfig(profile: any?): RetryDelayCalculator.Con
 	if type(settings) ~= "table" then
 		settings = {}
 	end
-	return RetryDelayCalculator.fromSettings(settings, profile and profile.id)
+	local config = RetryDelayCalculator.fromSettings(settings, profile and profile.id)
+	-- Diagnostic profiles are temporary copies. Respect their one-attempt
+	-- override without persisting changes to the user's chat retry settings.
+	if profile and type(profile.retryOverrides) == "table" then
+		local merged = table.clone(config)
+		for key, value in profile.retryOverrides do
+			if (merged :: any)[key] ~= nil then (merged :: any)[key] = value end
+		end
+		merged.providerOverrides = nil
+		return RetryDelayCalculator.fromSettings(merged, nil)
+	end
+	return config
 end
 
 --=============================================================================
@@ -605,16 +616,10 @@ end
 
 export type StreamCallbacks = {
 	onActivity: (() -> ())?,
+	onReset: (() -> ())?,
 	onText: ((delta: string) -> ())?,
 	onReasoning: ((delta: string) -> ())?,
-	onDone: ((result: {
-		text: string,
-		reasoning: string?,
-		toolCalls: { any },
-		usage: any,
-		durationMs: number,
-		attempts: number,
-	}) -> ())?,
+	onDone: ((result: any) -> ())?,
 	onError: ((normalised: ProviderErrorNormalizer.Normalised, attempts: number) -> ())?,
 	onWait: ((waitSeconds: number, decision: RetryDelayCalculator.Decision, attempt: number) -> ())?,
 	onAttempt: ((attempt: number) -> ())?,
@@ -623,188 +628,159 @@ export type StreamCallbacks = {
 	taskId: string?,
 }
 
---- Runs a streaming request. Non-streaming endpoints fall back transparently.
+--- Retries one provider turn; tool execution happens only after a complete result.
 function ProviderService.stream(profile: any, spec: any, apiKey: string?, callbacks: StreamCallbacks)
-	local prepared = ProviderService.prepare(profile, spec, apiKey, nil)
+	local prepared, prepareError = ProviderService.prepare(profile, spec, apiKey, nil)
 	if not prepared then
 		if callbacks.onError then
-			callbacks.onError(
-				ProviderErrorNormalizer.normalise({
-					provider = profile.displayName,
-					model = profile.modelId,
-					endpoint = profile.baseUrl,
-					transportError = "Could not build the request.",
-					elapsedMs = 0,
-				}),
-				0
-			)
+			callbacks.onError(ProviderErrorNormalizer.normalise({
+				provider = profile.displayName, model = profile.modelId, endpoint = profile.baseUrl,
+				transportError = prepareError or "Could not build the request.", elapsedMs = 0,
+			}), 0)
 		end
 		return
 	end
 
 	if not prepared.streaming then
-		-- Honest fallback: one non-streaming request, reported as such.
 		Logger.info("Streaming", "Streaming unavailable; using a single response.", {
 			detail = UniversalProviderRegistry.getProtocol(profile.protocol).label,
 		})
 		local result = ProviderService.complete(profile, spec, apiKey, {
-			operationId = callbacks.operationId,
-			taskId = callbacks.taskId,
-			onWait = callbacks.onWait,
-			onAttempt = callbacks.onAttempt,
-			shouldCancel = callbacks.shouldCancel,
+			operationId = callbacks.operationId, taskId = callbacks.taskId,
+			onWait = callbacks.onWait, onAttempt = callbacks.onAttempt, shouldCancel = callbacks.shouldCancel,
 		})
-		if result.ok and result.response and callbacks.onDone then
-			if callbacks.onText and (result.response.text or "") ~= "" then
-				callbacks.onText(result.response.text)
+		if result.ok and result.response then
+			if callbacks.onText and (result.response.text or "") ~= "" then callbacks.onText(result.response.text) end
+			if callbacks.onReasoning and result.response.reasoning then callbacks.onReasoning(result.response.reasoning) end
+			if callbacks.onDone then
+				local response = table.clone(result.response)
+				response.durationMs = result.durationMs
+				response.attempts = result.attempts
+				callbacks.onDone(response)
 			end
-			callbacks.onDone({
-				text = result.response.text or "",
-				reasoning = result.response.reasoning,
-				toolCalls = result.response.toolCalls or {},
-				usage = result.response.usage,
-				durationMs = result.durationMs,
-				attempts = result.attempts,
-				stopReason = result.response.stopReason,
-			})
-		elseif not result.ok and callbacks.onError then
+		elseif callbacks.onError then
 			callbacks.onError(result.error, result.attempts)
 		end
 		return
 	end
 
 	local adapter = ProviderService.getAdapter(profile.protocol)
-	local streamState = adapter.newStreamState()
-	local accumulated: { string } = {}
-	local accumulatedReasoning: { string } = {}
-	local streamError: string? = nil
-	local cancelled = false
-	local providerDone = false
-	local lastActivity = os.clock()
-	local function activity()
-		lastActivity = os.clock()
-		if callbacks.onActivity then callbacks.onActivity() end
-	end
-
-	ProviderRateLimitScheduler.recordRequest(profile.id, profile.modelId, endpointKey(profile))
-
-	local handle, openError = UniversalHTTPClient.stream({
-		url = prepared.url,
-		headers = prepared.headers,
-		body = prepared.body,
-		timeoutMs = profile.timeoutMs,
-		label = profile.displayName,
-	}, {
-		onActivity = activity,
-		onChunk = function(chunk)
-			if cancelled then
-				return
+	local currentText = ""
+	local currentReasoning = ""
+	local bestText = ""
+	local bestReasoning = ""
+	local operation = SmartAutoRetryManager.run({
+		operationId = callbacks.operationId, taskId = callbacks.taskId,
+		providerId = profile.id, providerName = profile.displayName or "Provider",
+		model = profile.modelId or "(not set)", endpoint = endpointKey(profile),
+		config = ProviderService.getRetryConfig(profile),
+		onWait = callbacks.onWait, onAttempt = callbacks.onAttempt, shouldCancel = callbacks.shouldCancel,
+		request = function(attemptIndex)
+			if attemptIndex > 1 and callbacks.onReset then callbacks.onReset() end
+			currentText = ""
+			currentReasoning = ""
+			local streamState = adapter.newStreamState()
+			local streamError: string? = nil
+			local errorInfo: any = {}
+			local providerDone = false
+			local settled = false
+			local cancelled = false
+			local lastActivity = os.clock()
+			local statusCode: number? = nil
+			local responseHeaders: { [string]: string } = {}
+			local function activity()
+				lastActivity = os.clock()
+				if callbacks.onActivity then callbacks.onActivity() end
 			end
-			activity()
-			for _, event in adapter.parseStreamChunk(streamState, chunk) do
-				if event.kind == "text" and event.text then
-					accumulated[#accumulated + 1] = event.text
-					if callbacks.onText then
-						callbacks.onText(event.text)
+			local function failed(message: string, info: any?)
+				streamError = message
+				if type(info) == "table" then errorInfo = info end
+			end
+
+			ProviderRateLimitScheduler.recordRequest(profile.id, profile.modelId, endpointKey(profile))
+			local handle, openError = UniversalHTTPClient.stream({
+				url = prepared.url, headers = prepared.headers, body = prepared.body,
+				timeoutMs = profile.timeoutMs, label = profile.displayName,
+			}, {
+				onActivity = function() if not settled then activity() end end,
+				onOpen = function(status, headers) statusCode = status; responseHeaders = headers or {}; activity() end,
+				onChunk = function(chunk)
+					if settled or cancelled then return end
+					activity()
+					for _, event in adapter.parseStreamChunk(streamState, chunk) do
+						if event.kind == "text" and event.text then
+							currentText ..= event.text
+							if callbacks.onText then callbacks.onText(event.text) end
+						elseif event.kind == "reasoning" and event.reasoning then
+							currentReasoning ..= event.reasoning
+							if callbacks.onReasoning then callbacks.onReasoning(event.reasoning) end
+						elseif event.kind == "done" then
+							providerDone = true
+						elseif event.kind == "error" and event.message then
+							failed(event.message, { body = event.body or event.message })
+						end
 					end
-				elseif event.kind == "reasoning" and event.reasoning then
-					accumulatedReasoning[#accumulatedReasoning + 1] = event.reasoning
-					if callbacks.onReasoning then
-						callbacks.onReasoning(event.reasoning)
-					end
-				elseif event.kind == "done" then
-                    providerDone = true
-				elseif event.kind == "error" and event.message then
-					streamError = event.message
+				end,
+				onError = function(message, info) if not settled then failed(message, info) end end,
+				onComplete = function() end,
+			})
+			if not handle then
+				-- A failed connection is a retryable attempt, not a second request
+				-- hidden inside a fallback retry loop.
+				return nil, { transportError = openError or "Could not open the provider stream." }
+			end
+
+			local idleSeconds = math.clamp((profile.timeoutMs or 120000) / 1000, 1, 600)
+			while not handle.isDone() and not providerDone and not streamError do
+				if callbacks.shouldCancel and callbacks.shouldCancel() then cancelled = true; break end
+				if os.clock() - lastActivity >= idleSeconds then
+					streamError = "Provider stream timed out: no upstream data within the configured idle timeout."
+					break
 				end
+				task.wait()
 			end
+			settled = true
+			if not handle.isDone() then handle.cancel() end
+			if callbacks.shouldCancel and callbacks.shouldCancel() then cancelled = true end
+			if cancelled then return nil, { transportError = "Cancelled." } end
+			local stopReason = streamState.finishReason or streamState.stopReason or streamState.status
+			if not streamError and not providerDone and not stopReason and profile.protocol ~= "custom_rest" then
+				streamError = "The provider connection closed before a completion marker. The partial answer was preserved."
+			end
+			if streamError then
+				if #currentText > #bestText then bestText = currentText; bestReasoning = currentReasoning end
+				errorInfo.statusCode = errorInfo.statusCode or statusCode
+				errorInfo.headers = errorInfo.headers or responseHeaders
+				if not errorInfo.body then errorInfo.transportError = errorInfo.transportError or streamError end
+				errorInfo.streamInterrupted = #currentText > 0 or #currentReasoning > 0
+				return nil, errorInfo
+			end
+			return {
+				text = currentText, reasoning = if currentReasoning ~= "" then currentReasoning else nil,
+				toolCalls = adapter.finalizeStream(streamState), usage = adapter.streamStateUsage(streamState),
+				stopReason = stopReason,
+			}, nil
 		end,
-		onError = function(message)
-			streamError = message
-		end,
-		onComplete = function() end,
 	})
 
-	if not handle then
-        if openError and (string.find(string.lower(openError), "timed out", 1, true) or string.find(string.lower(openError), "cancel", 1, true)) then
-            if callbacks.onError then callbacks.onError(ProviderErrorNormalizer.normalise({ provider = profile.displayName, model = profile.modelId, endpoint = profile.baseUrl, transportError = openError, elapsedMs = 0 }), 1) end
-            return
-        end
-		-- Streaming could not be opened. Fall back to a single response rather than
-		-- failing outright. Nothing is duplicated: the stream never started.
-		local fallbackSpec = table.clone(spec)
-		fallbackSpec.streaming = false
-		ProviderService.stream(profile, fallbackSpec, apiKey, callbacks)
-		return
-	end
-
-	local started = os.clock()
-    local idleSeconds = math.clamp((profile.timeoutMs or 120000) / 1000, 1, 600)
-	while not handle.isDone() and not providerDone and not streamError do
-		if callbacks.shouldCancel and callbacks.shouldCancel() then
-			cancelled = true
-			handle.cancel()
-			break
+	if operation.ok then
+		local result = operation.value
+		result.durationMs = operation.totalElapsedSeconds * 1000
+		result.attempts = operation.attemptsMade
+		if callbacks.onDone then callbacks.onDone(result) end
+	else
+		-- Failed retries must not erase an answer received before a disconnect.
+		-- Partial tool calls are never restored or executed.
+		if not operation.cancelled and #bestText > #currentText then
+			if callbacks.onReset then callbacks.onReset() end
+			if callbacks.onText then callbacks.onText(bestText) end
+			if callbacks.onReasoning and bestReasoning ~= "" then callbacks.onReasoning(bestReasoning) end
 		end
-        if os.clock() - lastActivity >= idleSeconds then
-            streamError = "Provider stream timed out: no upstream data within the configured idle timeout. The connection was closed; try again."
-            handle.cancel()
-            break
-        end
-		task.wait()
-	end
-	if (providerDone or streamError) and not handle.isDone() then handle.cancel() end
-	local stopReason = streamState.finishReason or streamState.stopReason or streamState.status
-	if not cancelled and not streamError and not providerDone and not stopReason and profile.protocol ~= "custom_rest" then
-		streamError = "The provider connection closed before a completion marker. The partial answer was preserved; retry to continue."
-	end
-
-	if cancelled then
-		if callbacks.onError then
-			callbacks.onError(
-				ProviderErrorNormalizer.normalise({
-					provider = profile.displayName,
-					model = profile.modelId,
-					endpoint = profile.baseUrl,
-					transportError = "Cancelled.",
-					elapsedMs = (os.clock() - started) * 1000,
-				}),
-				1
-			)
-		end
-		return
-	end
-
-	if streamError then
-		-- Stream-aware recovery: retry the WHOLE request rather than appending to
-		-- a partial body, which would duplicate output.
-		local normalised = ProviderErrorNormalizer.normalise({
-			provider = profile.displayName,
-			model = profile.modelId,
-			endpoint = profile.baseUrl,
-			transportError = streamError,
-			streamInterrupted = #accumulated > 0,
-			elapsedMs = (os.clock() - started) * 1000,
-		})
-		Logger.warn("Streaming", "Stream interrupted; the request was stopped.", {
-			detail = string.format("%s received %d character(s) before the interruption.", profile.displayName, #accumulated),
-		})
-		if callbacks.onError then
-			callbacks.onError(normalised, 1)
-		end
-		return
-	end
-
-	if callbacks.onDone then
-		callbacks.onDone({
-			text = table.concat(accumulated),
-			reasoning = if #accumulatedReasoning > 0 then table.concat(accumulatedReasoning) else nil,
-			toolCalls = adapter.finalizeStream(streamState),
-			usage = adapter.streamStateUsage(streamState),
-			durationMs = (os.clock() - started) * 1000,
-			attempts = 1,
-			stopReason = stopReason,
-		})
+		local normalised = if operation.cancelled then ProviderErrorNormalizer.normalise({
+			provider = profile.displayName, model = profile.modelId, endpoint = profile.baseUrl,
+			transportError = "Cancelled.", elapsedMs = operation.totalElapsedSeconds * 1000,
+		}) else operation.error
+		if callbacks.onError then callbacks.onError(normalised, operation.attemptsMade) end
 	end
 end
 

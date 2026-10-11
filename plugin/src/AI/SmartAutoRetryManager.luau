@@ -71,6 +71,7 @@ export type Operation = {
 	state: RetryState,
 	attempts: { Attempt },
 	attemptsMade: number,
+	maxRetries: number,
 	startedAt: number,
 	finishedAt: number?,
 	lastError: ProviderErrorNormalizer.Normalised?,
@@ -149,9 +150,9 @@ local function setState(operation: Operation, next: RetryState, detail: { [strin
 		state = next,
 		previous = previous,
 		attempt = operation.attemptsMade,
-		maxRetries = 0,
-		retryCount = operation.attemptsMade,
-		totalAttempts = operation.attemptsMade + 1,
+		maxRetries = operation.maxRetries,
+		retryCount = math.max(0, operation.attemptsMade - 1),
+		totalAttempts = operation.attemptsMade,
 		elapsedSeconds = runtime.clock() - operation.startedAt,
 	}
 	for key, value in detail or {} do
@@ -316,6 +317,7 @@ function SmartAutoRetryManager.run(options: RunOptions): RunResult
 		state = "IDLE",
 		attempts = {},
 		attemptsMade = 0,
+		maxRetries = config.maxRetries,
 		startedAt = now,
 		lastError = nil,
 		upstreamAttempts = nil,
@@ -356,7 +358,7 @@ function SmartAutoRetryManager.run(options: RunOptions): RunResult
 	local lastDecision: RetryDelayCalculator.Decision? = nil
 
 	while true do
-		if options.shouldCancel and options.shouldCancel() then
+		if operation.cancelled or (options.shouldCancel and options.shouldCancel()) then
 			operation.cancelled = true
 			setState(operation, "RETRY_CANCELLED", { reason = "Cancelled before an attempt." })
 			return finish(false, nil, operation.lastError, lastDecision)
@@ -410,6 +412,12 @@ function SmartAutoRetryManager.run(options: RunOptions): RunResult
 				operation.upstreamRetryNotices += 1
 				operation.upstreamAttempts = normalised.upstreamRetry.attempt
 			end
+		end
+
+		if operation.cancelled or (options.shouldCancel and options.shouldCancel()) then
+			operation.cancelled = true
+			setState(operation, "RETRY_CANCELLED", { reason = "Cancelled during the request." })
+			return finish(false, nil, normalised, lastDecision)
 		end
 
 		-- Success.
@@ -493,7 +501,7 @@ function SmartAutoRetryManager.run(options: RunOptions): RunResult
 				})
 			end
 			setState(operation, "RETRIES_EXHAUSTED", {
-				reason = "This error cannot be fixed by retrying.",
+				reason = if config.enabled then "This error cannot be fixed by retrying." else "Automatic retry is disabled.",
 				category = normalised.category,
 			})
 			return finish(false, nil, normalised, lastDecision)
@@ -548,14 +556,18 @@ function SmartAutoRetryManager.run(options: RunOptions): RunResult
 			headers = (errorInfo :: any).headers,
 			body = (errorInfo :: any).body,
 			cooldownSeconds = advisory.cooldownSeconds,
-			windowWaitSeconds = advisory.windowWaitSeconds,
+			cooldownEstimated = advisory.estimated,
+			windowWaitSeconds = if config.strategy == "opencode" and advisory.estimated then nil else advisory.windowWaitSeconds,
 			now = runtime.clock(),
 			random = runtime.random,
 		})
+		lastDecision.category = normalised.category
+		lastDecision.message = normalised.message
 
 		if lastDecision.exceedsAutoWait then
 			operation.paused = true
 			operation.pauseReason = lastDecision.reason
+			normalised.message ..= " " .. lastDecision.reason
 			Logger.warn("Retry", "Paused: the provider requires a longer wait than the automatic limit.", {
 				detail = lastDecision.reason,
 				taskId = options.taskId,
@@ -597,14 +609,27 @@ function SmartAutoRetryManager.run(options: RunOptions): RunResult
 			if options.onWait then
 				options.onWait(lastDecision.delaySeconds, lastDecision, retryIndex)
 			end
-			if not runtime.sleep(lastDecision.delaySeconds) then
-				operation.cancelled = true
-				setState(operation, "RETRY_CANCELLED", { reason = "Cancelled while waiting." })
-				return finish(false, nil, normalised, lastDecision)
+			-- task.wait returns no cancellation flag. Check cancellation between
+			-- short waits so Stop also works during a long provider cooldown.
+			local remaining = lastDecision.delaySeconds
+			while remaining > 0 do
+				if operation.cancelled or (options.shouldCancel and options.shouldCancel()) then
+					operation.cancelled = true
+					setState(operation, "RETRY_CANCELLED", { reason = "Cancelled while waiting." })
+					return finish(false, nil, normalised, lastDecision)
+				end
+				local slice = math.min(0.1, remaining)
+				if runtime.sleep(slice) == false then
+					operation.cancelled = true
+					setState(operation, "RETRY_CANCELLED", { reason = "Cancelled while waiting." })
+					return finish(false, nil, normalised, lastDecision)
+				end
+				remaining -= slice
 			end
 		end
 
 		if operation.cancelled or (options.shouldCancel and options.shouldCancel()) then
+			operation.cancelled = true
 			setState(operation, "RETRY_CANCELLED", { reason = "Cancelled before the next attempt." })
 			return finish(false, nil, normalised, lastDecision)
 		end

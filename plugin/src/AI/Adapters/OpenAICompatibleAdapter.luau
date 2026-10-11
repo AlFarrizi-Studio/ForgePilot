@@ -367,6 +367,10 @@ function Adapter.parseStreamChunk(state: any, chunk: string): { AdapterTypes.Res
 			if type(decoded.usage) == "table" then
 				state.usage = parseUsage(decoded.usage)
 			end
+			if type(decoded.error) == "table" then
+				events[#events + 1] = { kind = "error", message = tostring(decoded.error.message or "Provider stream error."), body = data }
+				continue
+			end
 
 			local choices = decoded.choices
 			if type(choices) ~= "table" or #choices == 0 then

@@ -98,6 +98,7 @@ for from in pairs(ACTIVE_STATES) do
 	row.CONNECTING = true
 	row.RATE_LIMIT_DETECTED = true
 	row.WAITING_FOR_QUOTA = true
+	row.RETRY_SCHEDULED = true
 	row.RETRYING = true
 	row.RETRY_CANCELLED = true
 	row.RETRIES_EXHAUSTED = true
@@ -135,6 +136,7 @@ ALLOWED.RETRY_SCHEDULED = {
 }
 ALLOWED.RETRYING = {
 	PROVIDER_RECOVERED = true,
+	RETRY_SCHEDULED = true,
 	RATE_LIMIT_DETECTED = true,
 	WAITING_FOR_QUOTA = true,
 	RETRIES_EXHAUSTED = true,
@@ -245,6 +247,11 @@ function StateManager.getActivity(): string?
 end
 
 local taskRunning = false
+--- True only while an agent run owns the request lock, including cleanup.
+function StateManager.isRunActive(): boolean
+	return taskRunning
+end
+
 function StateManager.isBusy(): boolean
 	return busy or taskRunning
 end

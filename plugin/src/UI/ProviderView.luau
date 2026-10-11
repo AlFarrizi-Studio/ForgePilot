@@ -1163,7 +1163,10 @@ function ProviderView.build(parent: GuiObject): (Frame, any)
 	testResult.Parent = actionsCard2
 
 	local function syncFooterStatus()
-		if testResult.Text ~= "" then
+		if StateManager.isBusy() and not probeBusy then
+			footerStatus.Text = "Chat in progress · Settings unlock when the task finishes."
+			footerStatus.TextColor3 = Theme.Extra.Warning
+		elseif testResult.Text ~= "" then
 			footerStatus.Text = string.match(testResult.Text, "[^\n]+") or testResult.Text
 			footerStatus.TextColor3 = testResult.TextColor3
 		else
@@ -1361,14 +1364,15 @@ function ProviderView.build(parent: GuiObject): (Frame, any)
 	--=========================================================================
 
 	local function setBusy(value: boolean)
-		probeBusy = value
-		busy = value or StateManager.isBusy()
+		probeBusy = value or operation ~= nil
+		busy = probeBusy or StateManager.isBusy()
 		if busy then Components.closeMenus() end
 		for _, control in view:GetDescendants() do
 			if control:IsA("GuiButton") then control.Interactable = not busy
 			elseif control:IsA("TextBox") then control.TextEditable = not busy end
 		end
 		testButton.Interactable = if probeBusy then not (operation and operation.cancelled) else not busy
+		syncFooterStatus()
 	end
 
 	local function restoreTestControls()
@@ -1416,7 +1420,7 @@ function ProviderView.build(parent: GuiObject): (Frame, any)
 		operation = token
 		local profile = table.clone(draft)
 		profile.timeoutMs = math.min(profile.timeoutMs or 120000, 15000)
-		profile.retryOverrides = { enabled = false, maxRetries = 0, rateLimitScheduler = false }
+		profile.retryOverrides = { enabled = false, maxRetries = 0, dynamicCooldown = false }
 		local function shouldCancel(): boolean
 			return destroyed or token.cancelled or operation ~= token or os.clock() >= token.deadline
 		end

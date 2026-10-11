@@ -103,6 +103,15 @@ local active: {
 }? = nil
 
 local unsub: (() -> ())? = nil
+local unsubState: (() -> ())? = nil
+
+local function belongsToCurrentTask(taskId: any): boolean
+	return type(taskId) == "string"
+		and taskId ~= ""
+		and taskId == StateManager.getTaskId()
+		and StateManager.isRunActive()
+		and not StateManager.isTerminal()
+end
 
 --- Starts listening. Safe to call more than once.
 function RetryStateManager.init()
@@ -110,8 +119,17 @@ function RetryStateManager.init()
 		return
 	end
 	unsub = EventBus.on("retry:state", function(payload)
+		-- Connection/capability tests have no chat task ID. Late callbacks from
+		-- completed/cancelled turns must not acquire the global editor/chat lock.
+		if type(payload) ~= "table" or not belongsToCurrentTask(payload.taskId) then
+			return
+		end
 		local next = payload.state
-		if type(next) ~= "string" or not StateManager.States[next :: any] then
+		if next == "IDLE" then
+			if active and active.operationId == payload.operationId then active = nil end
+			return -- The agent, rather than an individual HTTP request, ends the task.
+		end
+		if type(next) ~= "string" or not table.find(allRetryStates, next :: any) then
 			return
 		end
 
@@ -138,6 +156,9 @@ function RetryStateManager.init()
 			return
 		end
 	end)
+	unsubState = EventBus.on(EventBus.Events.StateChanged, function()
+		if active and not belongsToCurrentTask(active.taskId) then active = nil end
+	end)
 end
 
 function RetryStateManager.shutdown()
@@ -145,6 +166,11 @@ function RetryStateManager.shutdown()
 		unsub()
 		unsub = nil
 	end
+	if unsubState then
+		unsubState()
+		unsubState = nil
+	end
+	active = nil
 end
 
 --=============================================================================
@@ -152,58 +178,63 @@ end
 --=============================================================================
 
 function RetryStateManager.getActive()
+	if active and not belongsToCurrentTask(active.taskId) then active = nil end
 	return active
 end
 
 function RetryStateManager.isRetrying(): boolean
-	if not active then
+	local current = RetryStateManager.getActive()
+	if not current then
 		return false
 	end
-	return active.state == "RETRYING"
-		or active.state == "RETRY_SCHEDULED"
-		or active.state == "WAITING_FOR_QUOTA"
-		or active.state == "RATE_LIMIT_DETECTED"
+	return current.state == "RETRYING"
+		or current.state == "RETRY_SCHEDULED"
+		or current.state == "WAITING_FOR_QUOTA"
+		or current.state == "RATE_LIMIT_DETECTED"
 end
 
 function RetryStateManager.isTerminal(): boolean
-	if not active then
+	local current = RetryStateManager.getActive()
+	if not current then
 		return false
 	end
-	return active.state == "RETRIES_EXHAUSTED"
-		or active.state == "RETRY_CANCELLED"
-		or active.state == "PROVIDER_RECOVERED"
+	return current.state == "RETRIES_EXHAUSTED"
+		or current.state == "RETRY_CANCELLED"
+		or current.state == "PROVIDER_RECOVERED"
 end
 
 --- Human line for the thinking indicator, e.g. "Retrying request • Attempt 3/5".
 function RetryStateManager.shortText(): string?
-	if not active then
+	local current = RetryStateManager.getActive()
+	if not current then
 		return nil
 	end
-	local formatter = RetryStateManager.shortLabel[active.state]
+	local formatter = RetryStateManager.shortLabel[current.state]
 	if not formatter then
-		return RetryStateManager.displayLabel[active.state]
+		return RetryStateManager.displayLabel[current.state]
 	end
-	local text = formatter(active)
-	local elapsed = Time.formatDuration(os.clock() - active.updatedAt)
+	local text = formatter(current)
+	local elapsed = Time.formatDuration(os.clock() - current.updatedAt)
 	return string.format("%s • %s", text, elapsed)
 end
 
 --- One-line detail for logs and the retry card.
 function RetryStateManager.describe(): string?
-	if not active then
+	local current = RetryStateManager.getActive()
+	if not current then
 		return nil
 	end
 	local parts: { string } = {
-		RetryStateManager.displayLabel[active.state],
-		string.format("attempt %d", active.attempt),
-		active.provider,
-		active.model,
+		RetryStateManager.displayLabel[current.state],
+		string.format("attempt %d", current.attempt),
+		current.provider,
+		current.model,
 	}
-	if active.delaySeconds > 0 then
-		parts[#parts + 1] = string.format("%.0fs", active.delaySeconds)
+	if current.delaySeconds > 0 then
+		parts[#parts + 1] = string.format("%.0fs", current.delaySeconds)
 	end
-	if active.pauseReason then
-		parts[#parts + 1] = active.pauseReason
+	if current.pauseReason then
+		parts[#parts + 1] = current.pauseReason
 	end
 	return table.concat(parts, "  ·  ")
 end

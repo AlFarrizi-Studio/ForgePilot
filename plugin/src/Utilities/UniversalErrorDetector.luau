@@ -702,25 +702,28 @@ function UniversalErrorDetector.classify(input: Input): Classification
 	result.rateWindow = UniversalErrorDetector.parseRateWindow(input.body or "")
 
 	-- 0. Transport failures (no HTTP response at all).
-	if input.transportError then
+	if input.transportError and (input.statusCode == nil or input.statusCode < 400) then
 		local text = string.lower(input.transportError)
+		if string.find(text, "is not a valid member", 1, true)
+			or string.find(text, "stream processing failed", 1, true)
+			or string.find(text, "could not build the request", 1, true)
+		then
+			result.category = "INVALID_REQUEST"
+			result.source = "local_error"
+			result.message = Redact.scrubText(input.transportError)
+			result.confidence = 0.95
+			return result
+		end
 		if string.find(text, "timed out", 1, true) or string.find(text, "timeout", 1, true) then
 			result.category = "TIMEOUT"
 			result.source = "transport_error"
 			result.confidence = 0.95
 			return result
 		end
-		result.category = "NETWORK_ERROR"
+		result.category = if input.streamInterrupted then "STREAM_INTERRUPTED" else "NETWORK_ERROR"
 		result.source = "transport_error"
 		result.confidence = 0.8
 		result.message = Redact.scrubText(input.transportError)
-		return result
-	end
-
-	if input.streamInterrupted then
-		result.category = "STREAM_INTERRUPTED"
-		result.source = "stream_state"
-		result.confidence = 0.9
 		return result
 	end
 
@@ -839,6 +842,13 @@ function UniversalErrorDetector.classify(input: Input): Classification
 				end
 			end
 		end
+	end
+
+	if input.streamInterrupted and (status == nil or status < 400) then
+		result.category = "STREAM_INTERRUPTED"
+		result.source = "stream_state"
+		result.confidence = 0.9
+		return result
 	end
 
 	-- 7. Unknown fallback.

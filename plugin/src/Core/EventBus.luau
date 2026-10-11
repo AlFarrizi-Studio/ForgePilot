@@ -34,6 +34,7 @@ EventBus.Events = {
 
 	-- Providers
 	ProvidersChanged = "provider:changed",
+	RetrySettingsChanged = "retry:settingsChanged",
 	ActiveProviderChanged = "provider:activeChanged",
 	ConnectionTestResult = "provider:testResult",
 	CapabilitiesChanged = "provider:capabilities",

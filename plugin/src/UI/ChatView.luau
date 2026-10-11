@@ -17,6 +17,7 @@ local QuestionCard = require(script.Parent.QuestionCard)
 local RetryStatusUI = require(script.Parent.RetryStatusUI)
 local SessionManager = require(script.Parent.Parent.Core.SessionManager)
 local SettingsManager = require(script.Parent.Parent.Core.SettingsManager)
+local ProviderService = require(script.Parent.Parent.AI.ProviderService)
 local StateManager = require(script.Parent.Parent.Core.StateManager)
 local StreamingManager = require(script.Parent.Parent.AI.StreamingManager)
 local StringUtil = require(script.Parent.Parent.Utilities.StringUtil)
@@ -48,7 +49,7 @@ function ChatView.build(parent: GuiObject, hooks: any): (Frame, any)
 	top.Parent = stack
 	local title = Theme.label("New chat", { size = 12, font = Theme.Fonts.Medium, color = Theme.Colors.SecondaryText })
 	title.Name = "ConversationTitle"
-	title.Size = UDim2.new(1, -88, 1, 0)
+	title.Size = UDim2.new(1, -190, 1, 0)
 	title.Position = UDim2.fromOffset(8, 0)
 	title.TextTruncate = Enum.TextTruncate.AtEnd
 	title.Parent = top
@@ -60,6 +61,23 @@ function ChatView.build(parent: GuiObject, hooks: any): (Frame, any)
 	newChat.TextColor3 = Theme.Colors.SecondaryText
 	newChat.TextSize = 11
 	newChat.Parent = top
+	local retrySettings = Theme.textButton("Retry: On", { height = 28, width = UDim2.fromOffset(100, 28) })
+	retrySettings.Name = "AutoRetrySettings"
+	retrySettings.AnchorPoint = Vector2.new(1, 0)
+	retrySettings.Position = UDim2.new(1, -82, 0, 0)
+	retrySettings.BackgroundTransparency = 1
+	retrySettings.TextSize = 11
+	retrySettings.Parent = top
+	local function updateRetrySettings()
+		local enabled = ProviderService.getRetryConfig(SettingsManager.getActiveProvider()).enabled
+		retrySettings.Text = if enabled then "Retry: On" else "Retry: Off"
+		retrySettings.TextColor3 = if enabled then Theme.Colors.Highlight else Theme.Colors.SecondaryText
+	end
+	updateRetrySettings()
+	retrySettings.MouseButton1Click:Connect(function()
+		if hooks.onNavigate then hooks.onNavigate("settings") end
+		EventBus.emit(EventBus.Events.Navigate, { section = "settings", tab = "Retry" })
+	end)
 	local accessNotice = Theme.autoText("Local access is disconnected. Web and local files need the bridge. Setup: " .. AccessAdvisor.setupUrl, { size = 11, color = Theme.Extra.Warning })
 	accessNotice.Name = "AccessNotice"
 	accessNotice.LayoutOrder = 1
@@ -182,9 +200,9 @@ function ChatView.build(parent: GuiObject, hooks: any): (Frame, any)
 							local card
 							card, retryApi = RetryStatusUI.build({
 								operationId = StateManager.getTaskId() or conversation.id, providerName = profile and profile.displayName or "Provider",
-								model = profile and profile.modelId or "", category = decision.category or "RATE_LIMITED",
+								model = profile and profile.modelId or "", category = decision.category or "UNKNOWN_ERROR",
 								reason = decision.reason or "The provider is temporarily unavailable.",
-								maxRetries = SettingsManager.get().smartRetry.maxRetries,
+								maxRetries = ProviderService.getRetryConfig(profile).maxRetries,
 								providerId = profile and profile.id, endpoint = profile and profile.baseUrl,
 								attempt = attempt, delaySeconds = seconds, paused = false,
 								onCancel = function()
@@ -198,6 +216,7 @@ function ChatView.build(parent: GuiObject, hooks: any): (Frame, any)
 							follow = true
 						end
 						retryApi.setAttempt(attempt, seconds)
+						retryApi.setCategory(decision.category or "UNKNOWN_ERROR", decision.message or decision.reason)
 					end,
 					onRetryError = function(normalised: any)
 						if retryApi then retryApi.setCategory(normalised.category, normalised.message) end
@@ -406,6 +425,9 @@ function ChatView.build(parent: GuiObject, hooks: any): (Frame, any)
 	end
 	local unsubs = {}
 	unsubs[#unsubs + 1] = EventBus.on("BridgeChanged", function() accessNotice.Visible = not BridgeClient.isConnected() end)
+	unsubs[#unsubs + 1] = EventBus.on(EventBus.Events.ProvidersChanged, updateRetrySettings)
+	unsubs[#unsubs + 1] = EventBus.on(EventBus.Events.RetrySettingsChanged, updateRetrySettings)
+	unsubs[#unsubs + 1] = EventBus.on(EventBus.Events.ActiveProviderChanged, updateRetrySettings)
 	unsubs[#unsubs + 1] = EventBus.on(EventBus.Events.MessageStarted, function(payload)
 		if payload.conversationId == nil or payload.conversationId == SessionManager.getActiveId() then reconcile() end
 	end)

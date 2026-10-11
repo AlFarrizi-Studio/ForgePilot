@@ -102,6 +102,7 @@ function StreamingManager.run(options: {
 	operationId: string?,
 	onText: ((delta: string) -> ())?,
 	onReasoning: ((delta: string) -> ())?,
+	onReset: (() -> ())?,
 	onDone: ((result: {
 		text: string,
 		reasoning: string?,
@@ -161,6 +162,7 @@ function StreamingManager.run(options: {
 
 		ProviderService.stream(profile, options.spec, options.apiKey, {
 			onActivity = function() if isCurrent() then activity() end end,
+			onReset = function() if isCurrent() then activity(); if options.onReset then options.onReset() end end end,
 			operationId = options.operationId,
 			taskId = taskId,
 			onText = function(delta) if isCurrent() then activity(); if options.onText then options.onText(delta) end end end,

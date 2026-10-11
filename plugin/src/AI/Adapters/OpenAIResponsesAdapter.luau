@@ -341,11 +341,13 @@ function Adapter.parseStreamChunk(state: any, chunk: string): { AdapterTypes.Res
 			events[#events + 1] = { kind = "usage", usage = state.usage }
 			events[#events + 1] = { kind = "done" }
 		elseif decoded.type == "response.failed" then
-			events[#events + 1] = { kind = "error", message = "Response failed." }
+			local providerError = decoded.response and decoded.response.error
+			events[#events + 1] = { kind = "error", message = tostring(providerError and providerError.message or "Response failed."), body = if providerError then JSONValidator.encode({ error = providerError }) else data }
 		elseif decoded.type == "error" then
 			events[#events + 1] = {
 				kind = "error",
 				message = tostring(decoded.message or decoded.code or "Stream error."),
+				body = data,
 			}
 		end
 	end

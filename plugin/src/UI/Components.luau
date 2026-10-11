@@ -511,10 +511,36 @@ function Components.dropdown(label: string, options: { string }, onSelect: (stri
 	dismiss.Visible = false
 	local host: Frame? = nil
 	local connections: { RBXScriptConnection } = {}
+	local ownerConnections: { RBXScriptConnection } = {}
 	local function close()
 		menu.Visible = false
 		dismiss.Visible = false
+		for _, connection in ownerConnections do connection:Disconnect() end
+		table.clear(ownerConnections)
 		if closeActiveMenu == close then closeActiveMenu = nil end
+	end
+	local function watchOwner()
+		-- The menu is outside its owner in a shared overlay. It must not leave
+		-- an invisible full-panel input blocker after that owner goes away.
+		local ancestor: Instance? = button
+		while ancestor do
+			if ancestor:IsA("GuiObject") then
+				local object = ancestor
+				ownerConnections[#ownerConnections + 1] = object:GetPropertyChangedSignal("Visible"):Connect(function()
+					if not object.Visible then close() end
+				end)
+				ownerConnections[#ownerConnections + 1] = object:GetPropertyChangedSignal("Interactable"):Connect(function()
+					if not object.Interactable then close() end
+				end)
+			elseif ancestor:IsA("LayerCollector") then
+				local layer = ancestor
+				ownerConnections[#ownerConnections + 1] = layer:GetPropertyChangedSignal("Enabled"):Connect(function()
+					if not layer.Enabled then close() end
+				end)
+			end
+			ownerConnections[#ownerConnections + 1] = ancestor.AncestryChanged:Connect(close)
+			ancestor = ancestor.Parent
+		end
 	end
 	local function place()
 		if not host then return end
@@ -553,6 +579,7 @@ function Components.dropdown(label: string, options: { string }, onSelect: (stri
 		end
 	end
 	button.MouseButton1Click:Connect(function()
+		if not button.Interactable or not row.Parent then return end
 		if menu.Visible then close(); return end
 		Components.closeMenus()
 		host = Theme.overlayHost(row)
@@ -566,6 +593,7 @@ function Components.dropdown(label: string, options: { string }, onSelect: (stri
 		dismiss.Visible = true
 		menu.Visible = true
 		closeActiveMenu = close
+		watchOwner()
 	end)
 	dismiss.MouseButton1Click:Connect(close)
 	connections[#connections + 1] = button:GetPropertyChangedSignal("AbsolutePosition"):Connect(function() if menu.Visible then place() end end)

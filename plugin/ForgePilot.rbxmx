@@ -3,7 +3,7 @@
     <Properties>
       <string name="Name">ForgePilot</string>
       <token name="RunContext">3</token>
-      <string name="Source">--!plugin
+      <string name="Source"><![CDATA[--!plugin
 --!strict
 --[[
 	ForgePilot — AI-Powered Roblox Studio Assistant
@@ -50,7 +50,7 @@ local toolbar = plugin:CreateToolbar("ForgePilot")
 local button = toolbar:CreateButton(
 	"ForgePilot",
 	"Open the ForgePilot AI assistant",
-	"rbxassetid://14978048121"
+	"rbxthumb://type=Asset&id=82058489576798&w=150&h=150"
 )
 button.ClickableWhenViewportHidden = true
 print("[ForgePilot] Toolbar button created")
@@ -86,7 +86,7 @@ local function resolveModulePath(relativePath: string): (ModuleScript?, string?)
 					relativePath,
 					walked,
 					total,
-					(node and node:GetFullName()) or "&lt;none&gt;"
+					(node and node:GetFullName()) or "<none>"
 				)
 		end
 		if not (child:IsA("Folder") or child:IsA("ModuleScript")) then
@@ -195,7 +195,7 @@ local function isolateFailingModule(rootPath: string): (string?, string?, string
 			return culprit == nil
 		end
 		seen[path] = true
-		if depth &gt; 8 then
+		if depth > 8 then
 			return true
 		end
 
@@ -500,7 +500,8 @@ plugin.Unloading:Connect(function()
 		end
 	end)
 	print("[ForgePilot] Unloaded")
-end)</string>
+end)
+]]></string>
     </Properties>
     <Item class="Folder" referent="1">
       <Properties>
@@ -1117,6 +1118,7 @@ function Adapter.parseStreamChunk(state: any, chunk: string): { AdapterTypes.Res
 			events[#events + 1] = {
 				kind = "error",
 				message = tostring(err.message or "Anthropic stream error."),
+				body = data,
 			}
 		end
 	end
@@ -1439,7 +1441,7 @@ return Adapter</string>
         <Item class="ModuleScript" referent="8">
           <Properties>
             <string name="Name">GeminiAdapter</string>
-            <string name="Source">--!strict
+            <string name="Source"><![CDATA[--!strict
 local HttpService = game:GetService("HttpService")
 --[[
 	ForgePilot / AI / Adapters / GeminiAdapter
@@ -1512,11 +1514,11 @@ local function buildContent(message: AdapterTypes.ChatMessage): { [string]: any 
 		}
 	end
 
-	if message.parts and #message.parts &gt; 0 then
+	if message.parts and #message.parts > 0 then
 		for _, block in buildParts(message.parts) do
 			parts[#parts + 1] = block
 		end
-	elseif message.content and #message.content &gt; 0 then
+	elseif message.content and #message.content > 0 then
 		parts[#parts + 1] = { text = message.content }
 	end
 
@@ -1559,10 +1561,10 @@ function Adapter.buildRequest(profile: any, spec: RequestSpec, includeStream: bo
 		end
 	end
 
-	if spec.system and #StringUtil.trim(spec.system) &gt; 0 then
+	if spec.system and #StringUtil.trim(spec.system) > 0 then
 		systemParts[#systemParts + 1] = { text = spec.system }
 	end
-	if #systemParts &gt; 0 then
+	if #systemParts > 0 then
 		body.systemInstruction = { parts = systemParts }
 	end
 
@@ -1576,17 +1578,17 @@ function Adapter.buildRequest(profile: any, spec: RequestSpec, includeStream: bo
 	if spec.topP ~= nil then
 		generationConfig.topP = spec.topP
 	end
-	if spec.stopSequences and #spec.stopSequences &gt; 0 then
+	if spec.stopSequences and #spec.stopSequences > 0 then
 		generationConfig.stopSequences = spec.stopSequences
 	end
 	if spec.jsonMode then
 		generationConfig.responseMimeType = "application/json"
 	end
-	if countKeys(generationConfig) &gt; 0 then
+	if countKeys(generationConfig) > 0 then
 		body.generationConfig = generationConfig
 	end
 
-	if spec.tools and #spec.tools &gt; 0 then
+	if spec.tools and #spec.tools > 0 then
 		local declarations = {}
 		for _, tool in spec.tools do
 			declarations[#declarations + 1] = {
@@ -1704,7 +1706,7 @@ function Adapter.parseResponse(body: string): (CompleteResponse?, string?)
 
 	return {
 		text = table.concat(text),
-		reasoning = if #thoughtText &gt; 0 then table.concat(thoughtText, "\n") else nil,
+		reasoning = if #thoughtText > 0 then table.concat(thoughtText, "\n") else nil,
 		toolCalls = toolCalls,
 		usage = parseUsage(decoded.usageMetadata),
 		stopReason = candidate.finishReason,
@@ -1752,7 +1754,7 @@ function Adapter.parseStreamChunk(state: any, chunk: string): { AdapterTypes.Res
 		end
 
 		local candidates = decoded.candidates
-		if type(candidates) == "table" and #candidates &gt; 0 then
+		if type(candidates) == "table" and #candidates > 0 then
 			local candidate = candidates[1]
 			if candidate.finishReason then
 				state.finishReason = candidate.finishReason
@@ -1762,7 +1764,7 @@ function Adapter.parseStreamChunk(state: any, chunk: string): { AdapterTypes.Res
 					if type(part) ~= "table" then
 						continue
 					end
-					if type(part.text) == "string" and #part.text &gt; 0 then
+					if type(part.text) == "string" and #part.text > 0 then
 						if part.thought == true then
 							events[#events + 1] = { kind = "reasoning", reasoning = part.text }
 						else
@@ -1782,7 +1784,7 @@ function Adapter.parseStreamChunk(state: any, chunk: string): { AdapterTypes.Res
 		end
 
 		if type(decoded.error) == "table" then
-			events[#events + 1] = { kind = "error", message = tostring(decoded.error.message or "Gemini stream error.") }
+			events[#events + 1] = { kind = "error", message = tostring(decoded.error.message or "Gemini stream error."), body = data }
 		end
 	end
 
@@ -1826,7 +1828,7 @@ function Adapter.listModels(url: string, apiKey: string?): (string?, string?)
 		return nil, tostring(response)
 	end
 	local code = tonumber(response.StatusCode)
-	if code == nil or code &lt; 200 or code &gt;= 300 then
+	if code == nil or code < 200 or code >= 300 then
 		return nil, string.format("Model list failed (HTTP %s).", tostring(code))
 	end
 	local decoded = JSONValidator.decode(response.Body)
@@ -1843,7 +1845,8 @@ function Adapter.listModels(url: string, apiKey: string?): (string?, string?)
 	return ids, nil
 end
 
-return Adapter</string>
+return Adapter
+]]></string>
           </Properties>
         </Item>
         <Item class="ModuleScript" referent="9">
@@ -2101,7 +2104,7 @@ return Adapter</string>
         <Item class="ModuleScript" referent="10">
           <Properties>
             <string name="Name">OpenAICompatibleAdapter</string>
-            <string name="Source">--!strict
+            <string name="Source"><![CDATA[--!strict
 --[[
 	ForgePilot / AI / Adapters / OpenAICompatibleAdapter
 	Implements the OpenAI Chat Completions wire format.
@@ -2172,7 +2175,7 @@ local function buildMessage(message: ChatMessage, useSystemRole: boolean): { [st
 
 	local payload: { [string]: any } = { role = role }
 
-	if message.toolCalls and #message.toolCalls &gt; 0 then
+	if message.toolCalls and #message.toolCalls > 0 then
 		local calls = {}
 		for index, call in message.toolCalls do
 			local encoded = JSONValidator.encodeObject(call.arguments)
@@ -2187,7 +2190,7 @@ local function buildMessage(message: ChatMessage, useSystemRole: boolean): { [st
 		return payload
 	end
 
-	if message.parts and #message.parts &gt; 0 then
+	if message.parts and #message.parts > 0 then
 		local multimodal = false
 		for _, part in message.parts do
 			if part.kind ~= "text" then
@@ -2234,11 +2237,11 @@ function Adapter.buildRequest(profile: any, spec: RequestSpec, includeStream: bo
 		end
 	end
 
-	if spec.system and #StringUtil.trim(spec.system) &gt; 0 then
+	if spec.system and #StringUtil.trim(spec.system) > 0 then
 		systemBlocks[#systemBlocks + 1] = spec.system
 	end
 
-	if #systemBlocks &gt; 0 then
+	if #systemBlocks > 0 then
 		table.insert(messages, 1, { role = "system", content = table.concat(systemBlocks, "\n\n") })
 	end
 
@@ -2257,7 +2260,7 @@ function Adapter.buildRequest(profile: any, spec: RequestSpec, includeStream: bo
 			body.max_tokens = nil
 		end
 	end
-	if spec.stopSequences and #spec.stopSequences &gt; 0 then
+	if spec.stopSequences and #spec.stopSequences > 0 then
 		body.stop = spec.stopSequences
 	end
 	if spec.streaming and includeStream then
@@ -2273,7 +2276,7 @@ function Adapter.buildRequest(profile: any, spec: RequestSpec, includeStream: bo
 		end
 	end
 
-	if spec.tools and #spec.tools &gt; 0 then
+	if spec.tools and #spec.tools > 0 then
 		local tools = {}
 		for _, tool in spec.tools do
 			tools[#tools + 1] = {
@@ -2318,7 +2321,7 @@ function Adapter.buildHeaders(profile: any, apiKey: string?, streaming: boolean)
 	end
 
 	for key, value in (profile.extraHeaders or {}) do
-		if type(key) == "string" and type(value) == "string" and #value &gt; 0 then
+		if type(key) == "string" and type(value) == "string" and #value > 0 then
 			headers[key] = value
 		end
 	end
@@ -2418,7 +2421,7 @@ end
 
 local StreamState = {
 	buffer = "",
-	toolCalls = {}, -- index -&gt; { id, name, args }
+	toolCalls = {}, -- index -> { id, name, args }
 	finishReason = nil,
 	usage = nil :: Usage?,
 }
@@ -2470,6 +2473,10 @@ function Adapter.parseStreamChunk(state: any, chunk: string): { AdapterTypes.Res
 			if type(decoded.usage) == "table" then
 				state.usage = parseUsage(decoded.usage)
 			end
+			if type(decoded.error) == "table" then
+				events[#events + 1] = { kind = "error", message = tostring(decoded.error.message or "Provider stream error."), body = data }
+				continue
+			end
 
 			local choices = decoded.choices
 			if type(choices) ~= "table" or #choices == 0 then
@@ -2487,13 +2494,13 @@ function Adapter.parseStreamChunk(state: any, chunk: string): { AdapterTypes.Res
 				state.finishReason = choice.finish_reason
 			end
 
-			if type(delta.content) == "string" and #delta.content &gt; 0 then
+			if type(delta.content) == "string" and #delta.content > 0 then
 				events[#events + 1] = { kind = "text", text = delta.content }
 			end
 
 			-- Reasoning models stream their thinking under a provider-specific key.
 			local reasoning = delta.reasoning_content or delta.reasoning
-			if type(reasoning) == "string" and #reasoning &gt; 0 then
+			if type(reasoning) == "string" and #reasoning > 0 then
 				events[#events + 1] = { kind = "reasoning", reasoning = reasoning }
 			end
 
@@ -2552,7 +2559,8 @@ function Adapter.streamStateUsage(state: any): Usage?
 	return state.usage
 end
 
-return Adapter</string>
+return Adapter
+]]></string>
           </Properties>
         </Item>
         <Item class="ModuleScript" referent="11">
@@ -3138,11 +3146,13 @@ function Adapter.parseStreamChunk(state: any, chunk: string): { AdapterTypes.Res
 			events[#events + 1] = { kind = "usage", usage = state.usage }
 			events[#events + 1] = { kind = "done" }
 		elseif decoded.type == "response.failed" then
-			events[#events + 1] = { kind = "error", message = "Response failed." }
+			local providerError = decoded.response and decoded.response.error
+			events[#events + 1] = { kind = "error", message = tostring(providerError and providerError.message or "Response failed."), body = if providerError then JSONValidator.encode({ error = providerError }) else data }
 		elseif decoded.type == "error" then
 			events[#events + 1] = {
 				kind = "error",
 				message = tostring(decoded.message or decoded.code or "Stream error."),
+				body = data,
 			}
 		end
 	end
@@ -3969,6 +3979,12 @@ function AgentController.sendTurn(profile: any, spec: any, taskId: string, callb
 		apiKey = CredentialStore.get(profile.id),
 		taskId = taskId,
 		operationId = taskId,
+		onReset = function()
+			result.text = ""
+			result.reasoning = nil
+			result.toolCalls = {}
+			if callbacks.onReset then callbacks.onReset() end
+		end,
 		onText = function(delta)
 			result.text ..= delta
 			if callbacks.onDelta then
@@ -4126,6 +4142,10 @@ local function runTaskImpl(options: {
 		ContextManager.setPendingEstimate(flatText)
 
 		local turn = AgentController.sendTurn(profile, spec, taskId, {
+			onReset = function()
+				SessionManager.updateMessage(message.id, { content = "", reasoning = "", streaming = true })
+			end,
+			onAttempt = options.onRetryAttempt,
 			onDelta = function(delta, channel)
 				SessionManager.appendToMessage(message.id, delta, channel)
 				if options.onDelta then
@@ -9056,7 +9076,18 @@ function ProviderService.getRetryConfig(profile: any?): RetryDelayCalculator.Con
 	if type(settings) ~= "table" then
 		settings = {}
 	end
-	return RetryDelayCalculator.fromSettings(settings, profile and profile.id)
+	local config = RetryDelayCalculator.fromSettings(settings, profile and profile.id)
+	-- Diagnostic profiles are temporary copies. Respect their one-attempt
+	-- override without persisting changes to the user's chat retry settings.
+	if profile and type(profile.retryOverrides) == "table" then
+		local merged = table.clone(config)
+		for key, value in profile.retryOverrides do
+			if (merged :: any)[key] ~= nil then (merged :: any)[key] = value end
+		end
+		merged.providerOverrides = nil
+		return RetryDelayCalculator.fromSettings(merged, nil)
+	end
+	return config
 end
 
 --=============================================================================
@@ -9475,16 +9506,10 @@ end
 
 export type StreamCallbacks = {
 	onActivity: (() -> ())?,
+	onReset: (() -> ())?,
 	onText: ((delta: string) -> ())?,
 	onReasoning: ((delta: string) -> ())?,
-	onDone: ((result: {
-		text: string,
-		reasoning: string?,
-		toolCalls: { any },
-		usage: any,
-		durationMs: number,
-		attempts: number,
-	}) -> ())?,
+	onDone: ((result: any) -> ())?,
 	onError: ((normalised: ProviderErrorNormalizer.Normalised, attempts: number) -> ())?,
 	onWait: ((waitSeconds: number, decision: RetryDelayCalculator.Decision, attempt: number) -> ())?,
 	onAttempt: ((attempt: number) -> ())?,
@@ -9493,188 +9518,159 @@ export type StreamCallbacks = {
 	taskId: string?,
 }
 
---- Runs a streaming request. Non-streaming endpoints fall back transparently.
+--- Retries one provider turn; tool execution happens only after a complete result.
 function ProviderService.stream(profile: any, spec: any, apiKey: string?, callbacks: StreamCallbacks)
-	local prepared = ProviderService.prepare(profile, spec, apiKey, nil)
+	local prepared, prepareError = ProviderService.prepare(profile, spec, apiKey, nil)
 	if not prepared then
 		if callbacks.onError then
-			callbacks.onError(
-				ProviderErrorNormalizer.normalise({
-					provider = profile.displayName,
-					model = profile.modelId,
-					endpoint = profile.baseUrl,
-					transportError = "Could not build the request.",
-					elapsedMs = 0,
-				}),
-				0
-			)
+			callbacks.onError(ProviderErrorNormalizer.normalise({
+				provider = profile.displayName, model = profile.modelId, endpoint = profile.baseUrl,
+				transportError = prepareError or "Could not build the request.", elapsedMs = 0,
+			}), 0)
 		end
 		return
 	end
 
 	if not prepared.streaming then
-		-- Honest fallback: one non-streaming request, reported as such.
 		Logger.info("Streaming", "Streaming unavailable; using a single response.", {
 			detail = UniversalProviderRegistry.getProtocol(profile.protocol).label,
 		})
 		local result = ProviderService.complete(profile, spec, apiKey, {
-			operationId = callbacks.operationId,
-			taskId = callbacks.taskId,
-			onWait = callbacks.onWait,
-			onAttempt = callbacks.onAttempt,
-			shouldCancel = callbacks.shouldCancel,
+			operationId = callbacks.operationId, taskId = callbacks.taskId,
+			onWait = callbacks.onWait, onAttempt = callbacks.onAttempt, shouldCancel = callbacks.shouldCancel,
 		})
-		if result.ok and result.response and callbacks.onDone then
-			if callbacks.onText and (result.response.text or "") ~= "" then
-				callbacks.onText(result.response.text)
+		if result.ok and result.response then
+			if callbacks.onText and (result.response.text or "") ~= "" then callbacks.onText(result.response.text) end
+			if callbacks.onReasoning and result.response.reasoning then callbacks.onReasoning(result.response.reasoning) end
+			if callbacks.onDone then
+				local response = table.clone(result.response)
+				response.durationMs = result.durationMs
+				response.attempts = result.attempts
+				callbacks.onDone(response)
 			end
-			callbacks.onDone({
-				text = result.response.text or "",
-				reasoning = result.response.reasoning,
-				toolCalls = result.response.toolCalls or {},
-				usage = result.response.usage,
-				durationMs = result.durationMs,
-				attempts = result.attempts,
-				stopReason = result.response.stopReason,
-			})
-		elseif not result.ok and callbacks.onError then
+		elseif callbacks.onError then
 			callbacks.onError(result.error, result.attempts)
 		end
 		return
 	end
 
 	local adapter = ProviderService.getAdapter(profile.protocol)
-	local streamState = adapter.newStreamState()
-	local accumulated: { string } = {}
-	local accumulatedReasoning: { string } = {}
-	local streamError: string? = nil
-	local cancelled = false
-	local providerDone = false
-	local lastActivity = os.clock()
-	local function activity()
-		lastActivity = os.clock()
-		if callbacks.onActivity then callbacks.onActivity() end
-	end
-
-	ProviderRateLimitScheduler.recordRequest(profile.id, profile.modelId, endpointKey(profile))
-
-	local handle, openError = UniversalHTTPClient.stream({
-		url = prepared.url,
-		headers = prepared.headers,
-		body = prepared.body,
-		timeoutMs = profile.timeoutMs,
-		label = profile.displayName,
-	}, {
-		onActivity = activity,
-		onChunk = function(chunk)
-			if cancelled then
-				return
+	local currentText = ""
+	local currentReasoning = ""
+	local bestText = ""
+	local bestReasoning = ""
+	local operation = SmartAutoRetryManager.run({
+		operationId = callbacks.operationId, taskId = callbacks.taskId,
+		providerId = profile.id, providerName = profile.displayName or "Provider",
+		model = profile.modelId or "(not set)", endpoint = endpointKey(profile),
+		config = ProviderService.getRetryConfig(profile),
+		onWait = callbacks.onWait, onAttempt = callbacks.onAttempt, shouldCancel = callbacks.shouldCancel,
+		request = function(attemptIndex)
+			if attemptIndex > 1 and callbacks.onReset then callbacks.onReset() end
+			currentText = ""
+			currentReasoning = ""
+			local streamState = adapter.newStreamState()
+			local streamError: string? = nil
+			local errorInfo: any = {}
+			local providerDone = false
+			local settled = false
+			local cancelled = false
+			local lastActivity = os.clock()
+			local statusCode: number? = nil
+			local responseHeaders: { [string]: string } = {}
+			local function activity()
+				lastActivity = os.clock()
+				if callbacks.onActivity then callbacks.onActivity() end
 			end
-			activity()
-			for _, event in adapter.parseStreamChunk(streamState, chunk) do
-				if event.kind == "text" and event.text then
-					accumulated[#accumulated + 1] = event.text
-					if callbacks.onText then
-						callbacks.onText(event.text)
+			local function failed(message: string, info: any?)
+				streamError = message
+				if type(info) == "table" then errorInfo = info end
+			end
+
+			ProviderRateLimitScheduler.recordRequest(profile.id, profile.modelId, endpointKey(profile))
+			local handle, openError = UniversalHTTPClient.stream({
+				url = prepared.url, headers = prepared.headers, body = prepared.body,
+				timeoutMs = profile.timeoutMs, label = profile.displayName,
+			}, {
+				onActivity = function() if not settled then activity() end end,
+				onOpen = function(status, headers) statusCode = status; responseHeaders = headers or {}; activity() end,
+				onChunk = function(chunk)
+					if settled or cancelled then return end
+					activity()
+					for _, event in adapter.parseStreamChunk(streamState, chunk) do
+						if event.kind == "text" and event.text then
+							currentText ..= event.text
+							if callbacks.onText then callbacks.onText(event.text) end
+						elseif event.kind == "reasoning" and event.reasoning then
+							currentReasoning ..= event.reasoning
+							if callbacks.onReasoning then callbacks.onReasoning(event.reasoning) end
+						elseif event.kind == "done" then
+							providerDone = true
+						elseif event.kind == "error" and event.message then
+							failed(event.message, { body = event.body or event.message })
+						end
 					end
-				elseif event.kind == "reasoning" and event.reasoning then
-					accumulatedReasoning[#accumulatedReasoning + 1] = event.reasoning
-					if callbacks.onReasoning then
-						callbacks.onReasoning(event.reasoning)
-					end
-				elseif event.kind == "done" then
-                    providerDone = true
-				elseif event.kind == "error" and event.message then
-					streamError = event.message
+				end,
+				onError = function(message, info) if not settled then failed(message, info) end end,
+				onComplete = function() end,
+			})
+			if not handle then
+				-- A failed connection is a retryable attempt, not a second request
+				-- hidden inside a fallback retry loop.
+				return nil, { transportError = openError or "Could not open the provider stream." }
+			end
+
+			local idleSeconds = math.clamp((profile.timeoutMs or 120000) / 1000, 1, 600)
+			while not handle.isDone() and not providerDone and not streamError do
+				if callbacks.shouldCancel and callbacks.shouldCancel() then cancelled = true; break end
+				if os.clock() - lastActivity >= idleSeconds then
+					streamError = "Provider stream timed out: no upstream data within the configured idle timeout."
+					break
 				end
+				task.wait()
 			end
+			settled = true
+			if not handle.isDone() then handle.cancel() end
+			if callbacks.shouldCancel and callbacks.shouldCancel() then cancelled = true end
+			if cancelled then return nil, { transportError = "Cancelled." } end
+			local stopReason = streamState.finishReason or streamState.stopReason or streamState.status
+			if not streamError and not providerDone and not stopReason and profile.protocol ~= "custom_rest" then
+				streamError = "The provider connection closed before a completion marker. The partial answer was preserved."
+			end
+			if streamError then
+				if #currentText > #bestText then bestText = currentText; bestReasoning = currentReasoning end
+				errorInfo.statusCode = errorInfo.statusCode or statusCode
+				errorInfo.headers = errorInfo.headers or responseHeaders
+				if not errorInfo.body then errorInfo.transportError = errorInfo.transportError or streamError end
+				errorInfo.streamInterrupted = #currentText > 0 or #currentReasoning > 0
+				return nil, errorInfo
+			end
+			return {
+				text = currentText, reasoning = if currentReasoning ~= "" then currentReasoning else nil,
+				toolCalls = adapter.finalizeStream(streamState), usage = adapter.streamStateUsage(streamState),
+				stopReason = stopReason,
+			}, nil
 		end,
-		onError = function(message)
-			streamError = message
-		end,
-		onComplete = function() end,
 	})
 
-	if not handle then
-        if openError and (string.find(string.lower(openError), "timed out", 1, true) or string.find(string.lower(openError), "cancel", 1, true)) then
-            if callbacks.onError then callbacks.onError(ProviderErrorNormalizer.normalise({ provider = profile.displayName, model = profile.modelId, endpoint = profile.baseUrl, transportError = openError, elapsedMs = 0 }), 1) end
-            return
-        end
-		-- Streaming could not be opened. Fall back to a single response rather than
-		-- failing outright. Nothing is duplicated: the stream never started.
-		local fallbackSpec = table.clone(spec)
-		fallbackSpec.streaming = false
-		ProviderService.stream(profile, fallbackSpec, apiKey, callbacks)
-		return
-	end
-
-	local started = os.clock()
-    local idleSeconds = math.clamp((profile.timeoutMs or 120000) / 1000, 1, 600)
-	while not handle.isDone() and not providerDone and not streamError do
-		if callbacks.shouldCancel and callbacks.shouldCancel() then
-			cancelled = true
-			handle.cancel()
-			break
+	if operation.ok then
+		local result = operation.value
+		result.durationMs = operation.totalElapsedSeconds * 1000
+		result.attempts = operation.attemptsMade
+		if callbacks.onDone then callbacks.onDone(result) end
+	else
+		-- Failed retries must not erase an answer received before a disconnect.
+		-- Partial tool calls are never restored or executed.
+		if not operation.cancelled and #bestText > #currentText then
+			if callbacks.onReset then callbacks.onReset() end
+			if callbacks.onText then callbacks.onText(bestText) end
+			if callbacks.onReasoning and bestReasoning ~= "" then callbacks.onReasoning(bestReasoning) end
 		end
-        if os.clock() - lastActivity >= idleSeconds then
-            streamError = "Provider stream timed out: no upstream data within the configured idle timeout. The connection was closed; try again."
-            handle.cancel()
-            break
-        end
-		task.wait()
-	end
-	if (providerDone or streamError) and not handle.isDone() then handle.cancel() end
-	local stopReason = streamState.finishReason or streamState.stopReason or streamState.status
-	if not cancelled and not streamError and not providerDone and not stopReason and profile.protocol ~= "custom_rest" then
-		streamError = "The provider connection closed before a completion marker. The partial answer was preserved; retry to continue."
-	end
-
-	if cancelled then
-		if callbacks.onError then
-			callbacks.onError(
-				ProviderErrorNormalizer.normalise({
-					provider = profile.displayName,
-					model = profile.modelId,
-					endpoint = profile.baseUrl,
-					transportError = "Cancelled.",
-					elapsedMs = (os.clock() - started) * 1000,
-				}),
-				1
-			)
-		end
-		return
-	end
-
-	if streamError then
-		-- Stream-aware recovery: retry the WHOLE request rather than appending to
-		-- a partial body, which would duplicate output.
-		local normalised = ProviderErrorNormalizer.normalise({
-			provider = profile.displayName,
-			model = profile.modelId,
-			endpoint = profile.baseUrl,
-			transportError = streamError,
-			streamInterrupted = #accumulated > 0,
-			elapsedMs = (os.clock() - started) * 1000,
-		})
-		Logger.warn("Streaming", "Stream interrupted; the request was stopped.", {
-			detail = string.format("%s received %d character(s) before the interruption.", profile.displayName, #accumulated),
-		})
-		if callbacks.onError then
-			callbacks.onError(normalised, 1)
-		end
-		return
-	end
-
-	if callbacks.onDone then
-		callbacks.onDone({
-			text = table.concat(accumulated),
-			reasoning = if #accumulatedReasoning > 0 then table.concat(accumulatedReasoning) else nil,
-			toolCalls = adapter.finalizeStream(streamState),
-			usage = adapter.streamStateUsage(streamState),
-			durationMs = (os.clock() - started) * 1000,
-			attempts = 1,
-			stopReason = stopReason,
-		})
+		local normalised = if operation.cancelled then ProviderErrorNormalizer.normalise({
+			provider = profile.displayName, model = profile.modelId, endpoint = profile.baseUrl,
+			transportError = "Cancelled.", elapsedMs = operation.totalElapsedSeconds * 1000,
+		}) else operation.error
+		if callbacks.onError then callbacks.onError(normalised, operation.attemptsMade) end
 	end
 end
 
@@ -10103,7 +10099,7 @@ return RequestPolicy
       <Item class="ModuleScript" referent="29">
         <Properties>
           <string name="Name">RetryDelayCalculator</string>
-          <string name="Source">--!strict
+          <string name="Source"><![CDATA[--!strict
 local StringUtil = require(script.Parent.Parent.Utilities.StringUtil)
 
 local HttpService = game:GetService("HttpService")
@@ -10131,7 +10127,7 @@ local RetryDelayCalculator = {}
 -- TYPES
 --=============================================================================
 
-export type Strategy = "adaptive" | "linear" | "exponential" | "custom"
+export type Strategy = "opencode" | "adaptive" | "linear" | "exponential" | "custom"
 
 export type Config = {
 	enabled: boolean,
@@ -10147,7 +10143,7 @@ export type Config = {
 	maxAutoWaitSeconds: number,
 	customSequence: { number }?,
 	--- Per-provider overrides, keyed by provider profile id.
-	providerOverrides: { [string]: Partial&lt;Config&gt; }?,
+	providerOverrides: { [string]: Partial<Config> }?,
 }
 
 export type Source =
@@ -10165,6 +10161,8 @@ export type Source =
 	| "none"
 
 export type Decision = {
+	category: string?,
+	message: string?,
 	delaySeconds: number,
 	source: Source,
 	--- True when the wait is a provider requirement rather than our own choice.
@@ -10177,7 +10175,7 @@ export type Decision = {
 
 local DEFAULT_CONFIG: Config = {
 	enabled = true,
-	strategy = "adaptive",
+	strategy = "opencode",
 	maxRetries = 5,
 	initialDelaySeconds = 2,
 	multiplier = 2,
@@ -10256,7 +10254,7 @@ function RetryDelayCalculator.fromSettings(settings: any, providerId: string?): 
 
 	config.enabled = if type(settings.enabled) == "boolean" then settings.enabled else true
 	local strategy = settings.strategy
-	if strategy == "adaptive" or strategy == "linear" or strategy == "exponential" or strategy == "custom" then
+	if strategy == "opencode" or strategy == "adaptive" or strategy == "linear" or strategy == "exponential" or strategy == "custom" then
 		config.strategy = strategy
 	end
 
@@ -10274,12 +10272,12 @@ function RetryDelayCalculator.fromSettings(settings: any, providerId: string?): 
 	if type(settings.customSequence) == "table" then
 		local sequence: { number } = {}
 		for index, value in settings.customSequence do
-			if type(value) == "number" and #sequence &lt; 20 then
+			if type(value) == "number" and #sequence < 20 then
 				sequence[#sequence + 1] = math.clamp(value, 0, 3600)
 			end
 			_ = index
 		end
-		config.customSequence = #sequence &gt; 0 and sequence or nil
+		config.customSequence = #sequence > 0 and sequence or nil
 	end
 
 	-- Per-provider override.
@@ -10333,9 +10331,9 @@ end
 function RetryDelayCalculator.applyJitter(
 	delaySeconds: number,
 	jitterPercent: number,
-	random: () -&gt; number
+	random: () -> number
 ): number
-	if jitterPercent &lt;= 0 then
+	if jitterPercent <= 0 then
 		return delaySeconds
 	end
 	local factor = jitterPercent / 100
@@ -10348,7 +10346,7 @@ end
 
 --- Exponential backoff, clamped to maxDelaySeconds. Retry 1 is the first retry.
 function RetryDelayCalculator.exponential(attempt: number, config: Config): number
-	if attempt &lt;= 1 then
+	if attempt <= 1 then
 		return config.initialDelaySeconds
 	end
 	local delay = config.initialDelaySeconds * (config.multiplier ^ (attempt - 1))
@@ -10387,7 +10385,7 @@ function RetryDelayCalculator.parseRetryAfter(value: any, now: number): (number?
 
 	local seconds = tonumber(text)
 	if seconds ~= nil then
-		if seconds ~= seconds or seconds == math.huge or seconds &lt; 0 then
+		if seconds ~= seconds or seconds == math.huge or seconds < 0 then
 			return nil, nil
 		end
 		return math.min(seconds, 86400), "retry_after_seconds"
@@ -10417,7 +10415,7 @@ function RetryDelayCalculator.parseRetryAfter(value: any, now: number): (number?
 				-- the delta has to be measured against os.time() as well. Clamped
 				-- to one day for the same reason as the seconds branch above.
 				local delta = epoch - os.time()
-				if delta &gt; 0 then
+				if delta > 0 then
 					return math.min(delta, 86400), "retry_after_http_date"
 				end
 				-- A date in the past means "retry now".
@@ -10444,7 +10442,7 @@ function RetryDelayCalculator.readHeaders(
 
 	if lookup["retry-after-ms"] then
 		local ms = tonumber(lookup["retry-after-ms"])
-		if ms and ms == ms and ms &gt;= 0 then
+		if ms and ms == ms and ms >= 0 then
 			return math.min(ms / 1000, 86400), "retry_after_ms"
 		end
 	end
@@ -10496,7 +10494,7 @@ function RetryDelayCalculator.readBodyHint(body: string?): (number?, Source?)
 		if type(container) == "table" then
 			for _, field in { "retry_after", "retryAfter", "retry_after_seconds", "backoff", "wait_seconds" } do
 				local value = tonumber(container[field])
-				if value and value == value and value &gt;= 0 then
+				if value and value == value and value >= 0 then
 					return math.min(value, 86400), "body_retry_hint"
 				end
 			end
@@ -10518,10 +10516,11 @@ export type CalculateInput = {
 	body: string?,
 	--- Cooldown already established by ProviderRateLimitScheduler, in seconds.
 	cooldownSeconds: number?,
+	cooldownEstimated: boolean?,
 	--- Remaining time in the tracked sliding window, in seconds.
 	windowWaitSeconds: number?,
 	now: number,
-	random: () -&gt; number,
+	random: () -> number,
 }
 
 --- Resolves the wait before the next attempt.
@@ -10532,12 +10531,13 @@ function RetryDelayCalculator.calculate(input: CalculateInput): Decision
 	local candidates: { { seconds: number, source: Source, mandatory: boolean, estimated: boolean } } = {}
 
 	-- 1. Provider cooldown already established.
-	if config.dynamicCooldown and type(input.cooldownSeconds) == "number" and input.cooldownSeconds &gt; 0 then
+	if config.dynamicCooldown and type(input.cooldownSeconds) == "number" and input.cooldownSeconds > 0
+		and not (config.strategy == "opencode" and input.cooldownEstimated == true) then
 		candidates[#candidates + 1] = {
 			seconds = input.cooldownSeconds,
 			source = "provider_cooldown",
-			mandatory = true,
-			estimated = false,
+			mandatory = input.cooldownEstimated ~= true,
+			estimated = input.cooldownEstimated == true,
 		}
 	end
 
@@ -10568,7 +10568,7 @@ function RetryDelayCalculator.calculate(input: CalculateInput): Decision
 	end
 
 	-- 6. Tracked sliding window.
-	if config.dynamicCooldown and type(input.windowWaitSeconds) == "number" and input.windowWaitSeconds &gt; 0 then
+	if config.dynamicCooldown and type(input.windowWaitSeconds) == "number" and input.windowWaitSeconds > 0 then
 		candidates[#candidates + 1] = {
 			seconds = input.windowWaitSeconds,
 			source = "tracked_window",
@@ -10581,7 +10581,7 @@ function RetryDelayCalculator.calculate(input: CalculateInput): Decision
 	local mandatoryBest: { seconds: number, source: Source, estimated: boolean }? = nil
 	for _, candidate in candidates do
 		if candidate.mandatory then
-			if mandatoryBest == nil or candidate.seconds &gt; mandatoryBest.seconds then
+			if mandatoryBest == nil or candidate.seconds > mandatoryBest.seconds then
 				mandatoryBest = {
 					seconds = candidate.seconds,
 					source = candidate.source,
@@ -10604,7 +10604,7 @@ function RetryDelayCalculator.calculate(input: CalculateInput): Decision
 		local softBest: { seconds: number, source: Source, estimated: boolean }? = nil
 		for _, candidate in candidates do
 			if not candidate.mandatory then
-				if softBest == nil or candidate.seconds &gt; softBest.seconds then
+				if softBest == nil or candidate.seconds > softBest.seconds then
 					softBest = {
 						seconds = candidate.seconds,
 						source = candidate.source,
@@ -10623,10 +10623,15 @@ function RetryDelayCalculator.calculate(input: CalculateInput): Decision
 			}
 		else
 			-- 7. Error-specific fallback, then 8. backoff.
-			local fallback = RetryDelayCalculator.categoryFallback(input.category)
+			local fallback = if config.strategy == "opencode" then 0 else RetryDelayCalculator.categoryFallback(input.category)
 			local backoff: number
 			local backoffSource: Source
-			if config.strategy == "linear" then
+			if config.strategy == "opencode" then
+				-- OpenCode reference: 2s base, doubling, positive 25% jitter.
+				-- Keep the fallback bounded even when unrelated headers exist.
+				backoff = math.min(30, 2 * 2 ^ (attempt - 1))
+				backoffSource = "exponential_backoff"
+			elseif config.strategy == "linear" then
 				backoff = RetryDelayCalculator.linear(attempt, config)
 				backoffSource = "linear_backoff"
 			elseif config.strategy == "custom" then
@@ -10637,7 +10642,7 @@ function RetryDelayCalculator.calculate(input: CalculateInput): Decision
 				backoffSource = "exponential_backoff"
 			end
 
-			if fallback &gt; backoff then
+			if fallback > backoff then
 				chosen = {
 					seconds = fallback,
 					source = "category_fallback",
@@ -10661,11 +10666,17 @@ function RetryDelayCalculator.calculate(input: CalculateInput): Decision
 	local delay = chosen.seconds
 	if not chosen.mandatory then
 		delay = math.min(delay, config.maxDelaySeconds)
-		delay = RetryDelayCalculator.applyJitter(delay, config.jitterPercent, input.random)
-		delay = math.min(delay, config.maxDelaySeconds)
+		if config.strategy == "opencode" and chosen.source == "exponential_backoff" then
+			local random = input.random or math.random
+			delay *= 1 + 0.25 * math.clamp(random(), 0, 1)
+			delay = math.min(delay, config.maxDelaySeconds, 30)
+		else
+			delay = RetryDelayCalculator.applyJitter(delay, config.jitterPercent, input.random)
+			delay = math.min(delay, config.maxDelaySeconds)
+		end
 	end
 
-	local exceeds = delay &gt; config.maxAutoWaitSeconds
+	local exceeds = delay > config.maxAutoWaitSeconds
 	local reason: string
 	if chosen.mandatory then
 		reason = string.format(
@@ -10696,13 +10707,14 @@ function RetryDelayCalculator.calculate(input: CalculateInput): Decision
 	}
 end
 
-return RetryDelayCalculator</string>
+return RetryDelayCalculator
+]]></string>
         </Properties>
       </Item>
       <Item class="ModuleScript" referent="30">
         <Properties>
           <string name="Name">RetryStateManager</string>
-          <string name="Source">--!strict
+          <string name="Source"><![CDATA[--!strict
 --[[
 	ForgePilot / AI / RetryStateManager
 	Retry-aware view over Core/StateManager.
@@ -10754,7 +10766,7 @@ local displayLabels: { [string]: string } = {
 }
 
 --- Short strings shown next to the spinner, per the spec's examples.
-local shortLabels: { [string]: (payload: any) -&gt; string } = {
+local shortLabels: { [string]: (payload: any) -> string } = {
 	RATE_LIMIT_DETECTED = function()
 		return "Rate limited"
 	end,
@@ -10806,7 +10818,16 @@ local active: {
 	updatedAt: number,
 }? = nil
 
-local unsub: (() -&gt; ())? = nil
+local unsub: (() -> ())? = nil
+local unsubState: (() -> ())? = nil
+
+local function belongsToCurrentTask(taskId: any): boolean
+	return type(taskId) == "string"
+		and taskId ~= ""
+		and taskId == StateManager.getTaskId()
+		and StateManager.isRunActive()
+		and not StateManager.isTerminal()
+end
 
 --- Starts listening. Safe to call more than once.
 function RetryStateManager.init()
@@ -10814,8 +10835,17 @@ function RetryStateManager.init()
 		return
 	end
 	unsub = EventBus.on("retry:state", function(payload)
+		-- Connection/capability tests have no chat task ID. Late callbacks from
+		-- completed/cancelled turns must not acquire the global editor/chat lock.
+		if type(payload) ~= "table" or not belongsToCurrentTask(payload.taskId) then
+			return
+		end
 		local next = payload.state
-		if type(next) ~= "string" or not StateManager.States[next :: any] then
+		if next == "IDLE" then
+			if active and active.operationId == payload.operationId then active = nil end
+			return -- The agent, rather than an individual HTTP request, ends the task.
+		end
+		if type(next) ~= "string" or not table.find(allRetryStates, next :: any) then
 			return
 		end
 
@@ -10842,6 +10872,9 @@ function RetryStateManager.init()
 			return
 		end
 	end)
+	unsubState = EventBus.on(EventBus.Events.StateChanged, function()
+		if active and not belongsToCurrentTask(active.taskId) then active = nil end
+	end)
 end
 
 function RetryStateManager.shutdown()
@@ -10849,6 +10882,11 @@ function RetryStateManager.shutdown()
 		unsub()
 		unsub = nil
 	end
+	if unsubState then
+		unsubState()
+		unsubState = nil
+	end
+	active = nil
 end
 
 --=============================================================================
@@ -10856,58 +10894,63 @@ end
 --=============================================================================
 
 function RetryStateManager.getActive()
+	if active and not belongsToCurrentTask(active.taskId) then active = nil end
 	return active
 end
 
 function RetryStateManager.isRetrying(): boolean
-	if not active then
+	local current = RetryStateManager.getActive()
+	if not current then
 		return false
 	end
-	return active.state == "RETRYING"
-		or active.state == "RETRY_SCHEDULED"
-		or active.state == "WAITING_FOR_QUOTA"
-		or active.state == "RATE_LIMIT_DETECTED"
+	return current.state == "RETRYING"
+		or current.state == "RETRY_SCHEDULED"
+		or current.state == "WAITING_FOR_QUOTA"
+		or current.state == "RATE_LIMIT_DETECTED"
 end
 
 function RetryStateManager.isTerminal(): boolean
-	if not active then
+	local current = RetryStateManager.getActive()
+	if not current then
 		return false
 	end
-	return active.state == "RETRIES_EXHAUSTED"
-		or active.state == "RETRY_CANCELLED"
-		or active.state == "PROVIDER_RECOVERED"
+	return current.state == "RETRIES_EXHAUSTED"
+		or current.state == "RETRY_CANCELLED"
+		or current.state == "PROVIDER_RECOVERED"
 end
 
 --- Human line for the thinking indicator, e.g. "Retrying request • Attempt 3/5".
 function RetryStateManager.shortText(): string?
-	if not active then
+	local current = RetryStateManager.getActive()
+	if not current then
 		return nil
 	end
-	local formatter = RetryStateManager.shortLabel[active.state]
+	local formatter = RetryStateManager.shortLabel[current.state]
 	if not formatter then
-		return RetryStateManager.displayLabel[active.state]
+		return RetryStateManager.displayLabel[current.state]
 	end
-	local text = formatter(active)
-	local elapsed = Time.formatDuration(os.clock() - active.updatedAt)
+	local text = formatter(current)
+	local elapsed = Time.formatDuration(os.clock() - current.updatedAt)
 	return string.format("%s • %s", text, elapsed)
 end
 
 --- One-line detail for logs and the retry card.
 function RetryStateManager.describe(): string?
-	if not active then
+	local current = RetryStateManager.getActive()
+	if not current then
 		return nil
 	end
 	local parts: { string } = {
-		RetryStateManager.displayLabel[active.state],
-		string.format("attempt %d", active.attempt),
-		active.provider,
-		active.model,
+		RetryStateManager.displayLabel[current.state],
+		string.format("attempt %d", current.attempt),
+		current.provider,
+		current.model,
 	}
-	if active.delaySeconds &gt; 0 then
-		parts[#parts + 1] = string.format("%.0fs", active.delaySeconds)
+	if current.delaySeconds > 0 then
+		parts[#parts + 1] = string.format("%.0fs", current.delaySeconds)
 	end
-	if active.pauseReason then
-		parts[#parts + 1] = active.pauseReason
+	if current.pauseReason then
+		parts[#parts + 1] = current.pauseReason
 	end
 	return table.concat(parts, "  ·  ")
 end
@@ -10916,7 +10959,8 @@ function RetryStateManager.clear()
 	active = nil
 end
 
-return RetryStateManager</string>
+return RetryStateManager
+]]></string>
         </Properties>
       </Item>
       <Item class="ModuleScript" referent="31">
@@ -11088,6 +11132,7 @@ export type Operation = {
 	state: RetryState,
 	attempts: { Attempt },
 	attemptsMade: number,
+	maxRetries: number,
 	startedAt: number,
 	finishedAt: number?,
 	lastError: ProviderErrorNormalizer.Normalised?,
@@ -11166,9 +11211,9 @@ local function setState(operation: Operation, next: RetryState, detail: { [strin
 		state = next,
 		previous = previous,
 		attempt = operation.attemptsMade,
-		maxRetries = 0,
-		retryCount = operation.attemptsMade,
-		totalAttempts = operation.attemptsMade + 1,
+		maxRetries = operation.maxRetries,
+		retryCount = math.max(0, operation.attemptsMade - 1),
+		totalAttempts = operation.attemptsMade,
 		elapsedSeconds = runtime.clock() - operation.startedAt,
 	}
 	for key, value in detail or {} do
@@ -11333,6 +11378,7 @@ function SmartAutoRetryManager.run(options: RunOptions): RunResult
 		state = "IDLE",
 		attempts = {},
 		attemptsMade = 0,
+		maxRetries = config.maxRetries,
 		startedAt = now,
 		lastError = nil,
 		upstreamAttempts = nil,
@@ -11373,7 +11419,7 @@ function SmartAutoRetryManager.run(options: RunOptions): RunResult
 	local lastDecision: RetryDelayCalculator.Decision? = nil
 
 	while true do
-		if options.shouldCancel and options.shouldCancel() then
+		if operation.cancelled or (options.shouldCancel and options.shouldCancel()) then
 			operation.cancelled = true
 			setState(operation, "RETRY_CANCELLED", { reason = "Cancelled before an attempt." })
 			return finish(false, nil, operation.lastError, lastDecision)
@@ -11427,6 +11473,12 @@ function SmartAutoRetryManager.run(options: RunOptions): RunResult
 				operation.upstreamRetryNotices += 1
 				operation.upstreamAttempts = normalised.upstreamRetry.attempt
 			end
+		end
+
+		if operation.cancelled or (options.shouldCancel and options.shouldCancel()) then
+			operation.cancelled = true
+			setState(operation, "RETRY_CANCELLED", { reason = "Cancelled during the request." })
+			return finish(false, nil, normalised, lastDecision)
 		end
 
 		-- Success.
@@ -11510,7 +11562,7 @@ function SmartAutoRetryManager.run(options: RunOptions): RunResult
 				})
 			end
 			setState(operation, "RETRIES_EXHAUSTED", {
-				reason = "This error cannot be fixed by retrying.",
+				reason = if config.enabled then "This error cannot be fixed by retrying." else "Automatic retry is disabled.",
 				category = normalised.category,
 			})
 			return finish(false, nil, normalised, lastDecision)
@@ -11565,14 +11617,18 @@ function SmartAutoRetryManager.run(options: RunOptions): RunResult
 			headers = (errorInfo :: any).headers,
 			body = (errorInfo :: any).body,
 			cooldownSeconds = advisory.cooldownSeconds,
-			windowWaitSeconds = advisory.windowWaitSeconds,
+			cooldownEstimated = advisory.estimated,
+			windowWaitSeconds = if config.strategy == "opencode" and advisory.estimated then nil else advisory.windowWaitSeconds,
 			now = runtime.clock(),
 			random = runtime.random,
 		})
+		lastDecision.category = normalised.category
+		lastDecision.message = normalised.message
 
 		if lastDecision.exceedsAutoWait then
 			operation.paused = true
 			operation.pauseReason = lastDecision.reason
+			normalised.message ..= " " .. lastDecision.reason
 			Logger.warn("Retry", "Paused: the provider requires a longer wait than the automatic limit.", {
 				detail = lastDecision.reason,
 				taskId = options.taskId,
@@ -11614,14 +11670,27 @@ function SmartAutoRetryManager.run(options: RunOptions): RunResult
 			if options.onWait then
 				options.onWait(lastDecision.delaySeconds, lastDecision, retryIndex)
 			end
-			if not runtime.sleep(lastDecision.delaySeconds) then
-				operation.cancelled = true
-				setState(operation, "RETRY_CANCELLED", { reason = "Cancelled while waiting." })
-				return finish(false, nil, normalised, lastDecision)
+			-- task.wait returns no cancellation flag. Check cancellation between
+			-- short waits so Stop also works during a long provider cooldown.
+			local remaining = lastDecision.delaySeconds
+			while remaining > 0 do
+				if operation.cancelled or (options.shouldCancel and options.shouldCancel()) then
+					operation.cancelled = true
+					setState(operation, "RETRY_CANCELLED", { reason = "Cancelled while waiting." })
+					return finish(false, nil, normalised, lastDecision)
+				end
+				local slice = math.min(0.1, remaining)
+				if runtime.sleep(slice) == false then
+					operation.cancelled = true
+					setState(operation, "RETRY_CANCELLED", { reason = "Cancelled while waiting." })
+					return finish(false, nil, normalised, lastDecision)
+				end
+				remaining -= slice
 			end
 		end
 
 		if operation.cancelled or (options.shouldCancel and options.shouldCancel()) then
+			operation.cancelled = true
 			setState(operation, "RETRY_CANCELLED", { reason = "Cancelled before the next attempt." })
 			return finish(false, nil, normalised, lastDecision)
 		end
@@ -11788,6 +11857,7 @@ function StreamingManager.run(options: {
 	operationId: string?,
 	onText: ((delta: string) -> ())?,
 	onReasoning: ((delta: string) -> ())?,
+	onReset: (() -> ())?,
 	onDone: ((result: {
 		text: string,
 		reasoning: string?,
@@ -11847,6 +11917,7 @@ function StreamingManager.run(options: {
 
 		ProviderService.stream(profile, options.spec, options.apiKey, {
 			onActivity = function() if isCurrent() then activity() end end,
+			onReset = function() if isCurrent() then activity(); if options.onReset then options.onReset() end end end,
 			operationId = options.operationId,
 			taskId = taskId,
 			onText = function(delta) if isCurrent() then activity(); if options.onText then options.onText(delta) end end end,
@@ -13443,6 +13514,7 @@ function BridgeClient.stream(request: any, callbacks: any): (any?, string?)
     local idleSeconds = math.clamp((request.timeoutMs or 120000) / 1000, 1, 600)
     local lastActivity = started
     local activitySequence: number? = nil
+    local opened = false
     local collected = {}
     local function release()
         if released then return end
@@ -13467,6 +13539,10 @@ function BridgeClient.stream(request: any, callbacks: any): (any?, string?)
                 local value, problem = BridgeClient.request("/stream/" .. job.id .. "?cursor=" .. tostring(cursor), nil, "GET", math.min(15, math.max(1, idleSeconds - (os.clock() - lastActivity))), function() return cancelled end)
                 if cancelled or done then break end
                 if not value then reportError(problem or "Bridge stream failed."); break end
+                if not opened and type(value.statusCode) == "number" then
+                    opened = true
+                    if callbacks.onOpen then callbacks.onOpen(value.statusCode, value.headers or {}) end
+                end
                 if type(value.activitySequence) == "number" and value.activitySequence ~= activitySequence then
                     activitySequence = value.activitySequence
                     lastActivity = os.clock()
@@ -13486,7 +13562,7 @@ function BridgeClient.stream(request: any, callbacks: any): (any?, string?)
                     done = true
                     release()
                     if value.error then
-                        if callbacks.onError then pcall(callbacks.onError, value.error) end
+                        if callbacks.onError then pcall(callbacks.onError, value.error, { statusCode = value.statusCode, headers = value.headers, body = value.errorBody }) end
                     elseif callbacks.onComplete then
                         callbacks.onComplete(table.concat(collected), (os.clock() - started) * 1000, value.statusCode)
                     end
@@ -13626,7 +13702,7 @@ return CredentialStore</string>
       <Item class="ModuleScript" referent="40">
         <Properties>
           <string name="Name">EventBus</string>
-          <string name="Source">--!strict
+          <string name="Source"><![CDATA[--!strict
 --[[
 	ForgePilot / Core / EventBus
 	Typed signal hub shared by the AI, Roblox and UI layers.
@@ -13662,6 +13738,7 @@ EventBus.Events = {
 
 	-- Providers
 	ProvidersChanged = "provider:changed",
+	RetrySettingsChanged = "retry:settingsChanged",
 	ActiveProviderChanged = "provider:activeChanged",
 	ConnectionTestResult = "provider:testResult",
 	CapabilitiesChanged = "provider:capabilities",
@@ -13694,7 +13771,7 @@ EventBus.Events = {
 	StreamEvent = "ui:streamEvent",
 }
 
-type Handler = (payload: Payload) -&gt; ()
+type Handler = (payload: Payload) -> ()
 
 local handlers: { [string]: { { id: number, callback: Handler } } } = {}
 local nextHandlerId = 1
@@ -13704,7 +13781,7 @@ local nextHandlerId = 1
 --=============================================================================
 
 --- Subscribes to an event. Returns a function that unsubscribes.
-function EventBus.on(eventName: string, callback: Handler): () -&gt; ()
+function EventBus.on(eventName: string, callback: Handler): () -> ()
 	local bucket = handlers[eventName]
 	if not bucket then
 		bucket = {}
@@ -13729,8 +13806,8 @@ function EventBus.on(eventName: string, callback: Handler): () -&gt; ()
 end
 
 --- Subscribes for a single delivery.
-function EventBus.once(eventName: string, callback: Handler): () -&gt; ()
-	local disconnect: () -&gt; ()
+function EventBus.once(eventName: string, callback: Handler): () -> ()
+	local disconnect: () -> ()
 	disconnect = EventBus.on(eventName, function(payload)
 		disconnect()
 		callback(payload)
@@ -13771,7 +13848,8 @@ function EventBus.listenerCount(eventName: string): number
 	return bucket and #bucket or 0
 end
 
-return EventBus</string>
+return EventBus
+]]></string>
         </Properties>
       </Item>
       <Item class="ModuleScript" referent="41">
@@ -14483,7 +14561,7 @@ local function defaultSettings(): Settings
 		reserveTokensForTools = 4096,
 		smartRetry = {
 			enabled = true,
-			strategy = "adaptive",
+			strategy = "opencode",
 			maxRetries = 5,
 			initialDelaySeconds = 2,
 			multiplier = 2,
@@ -14748,7 +14826,7 @@ return SettingsManager
       <Item class="ModuleScript" referent="43">
         <Properties>
           <string name="Name">SmartRetrySettings</string>
-          <string name="Source">--!strict
+          <string name="Source"><![CDATA[--!strict
 --[[
 	ForgePilot / Core / SmartRetrySettings
 	Thin, validated accessor over the persisted `smartRetry` settings block.
@@ -14758,6 +14836,7 @@ return SettingsManager
 ]]
 
 local SettingsManager = require(script.Parent.SettingsManager)
+local EventBus = require(script.Parent.EventBus)
 
 local SmartRetry = {}
 
@@ -14788,8 +14867,8 @@ local function block(): any
 end
 
 --- Reads a retry setting.
-function SmartRetry.get(key: string): any
-	return block()[key]
+function SmartRetry.get(key: string?): any
+	return if key == nil then block() else block()[key]
 end
 
 --- Writes a retry setting, clamping numeric values and validating enums.
@@ -14814,7 +14893,7 @@ function SmartRetry.set(key: string, value: any)
 	then
 		coerced = value == true
 	elseif key == "strategy" then
-		local valid = { adaptive = true, exponential = true, linear = true, custom = true }
+		local valid = { opencode = true, adaptive = true, exponential = true, linear = true, custom = true }
 		if not valid[value] then
 			return false
 		end
@@ -14828,16 +14907,17 @@ function SmartRetry.set(key: string, value: any)
 				if numberValue then
 					sequence[#sequence + 1] = math.clamp(numberValue, 0, 3600)
 				end
-				if #sequence &gt;= 20 then
+				if #sequence >= 20 then
 					break
 				end
 			end
-			coerced = if #sequence &gt; 0 then sequence else nil
+			coerced = if #sequence > 0 then sequence else nil
 		end
 	end
 
 	block()[key] = coerced
 	SettingsManager.persist()
+	EventBus.emit(EventBus.Events.RetrySettingsChanged, { key = key })
 	return true
 end
 
@@ -14845,7 +14925,7 @@ end
 --- dependent on the settings template being re-seeded.
 local DEFAULTS: { [string]: any } = {
 	enabled = true,
-	strategy = "adaptive",
+	strategy = "opencode",
 	maxRetries = 5,
 	initialDelaySeconds = 2,
 	multiplier = 2,
@@ -14872,6 +14952,7 @@ function SmartRetry.resetDefaults()
 	end
 	settings.smartRetry = fresh
 	SettingsManager.persist()
+	EventBus.emit(EventBus.Events.RetrySettingsChanged, { reset = true })
 	return true
 end
 
@@ -14917,6 +14998,7 @@ function SmartRetry.setProviderOverride(providerId: string, patch: { [string]: a
 	end
 
 	SettingsManager.persist()
+	EventBus.emit(EventBus.Events.RetrySettingsChanged, { providerId = providerId })
 	return true
 end
 
@@ -14925,7 +15007,7 @@ end
 --=============================================================================
 
 local function human(seconds: number): string
-	if seconds &gt;= 60 then
+	if seconds >= 60 then
 		return string.format("%.0fm", seconds / 60)
 	end
 	return string.format("%.0fs", seconds)
@@ -14933,13 +15015,16 @@ end
 
 --- A one-line human description of the current schedule.
 function SmartRetry.describe(): string
-	local strategy = block().strategy or "adaptive"
+	local strategy = block().strategy or "opencode"
 	local maxRetries = block().maxRetries or 5
 	local initial = block().initialDelaySeconds or 2
 	local multiplier = block().multiplier or 2
 
 	if not block().enabled then
 		return "Automatic retry is disabled."
+	end
+	if strategy == "opencode" then
+		return string.format("OpenCode: 2s base, x2, up to 25%% extra jitter, 30s fallback cap; up to %d retries. Provider cooldowns are respected.", maxRetries)
 	end
 
 	if strategy == "linear" then
@@ -14962,7 +15047,8 @@ function SmartRetry.describe(): string
 	)
 end
 
-return SmartRetry</string>
+return SmartRetry
+]]></string>
         </Properties>
       </Item>
       <Item class="ModuleScript" referent="44">
@@ -15068,6 +15154,7 @@ for from in pairs(ACTIVE_STATES) do
 	row.CONNECTING = true
 	row.RATE_LIMIT_DETECTED = true
 	row.WAITING_FOR_QUOTA = true
+	row.RETRY_SCHEDULED = true
 	row.RETRYING = true
 	row.RETRY_CANCELLED = true
 	row.RETRIES_EXHAUSTED = true
@@ -15105,6 +15192,7 @@ ALLOWED.RETRY_SCHEDULED = {
 }
 ALLOWED.RETRYING = {
 	PROVIDER_RECOVERED = true,
+	RETRY_SCHEDULED = true,
 	RATE_LIMIT_DETECTED = true,
 	WAITING_FOR_QUOTA = true,
 	RETRIES_EXHAUSTED = true,
@@ -15215,6 +15303,11 @@ function StateManager.getActivity(): string?
 end
 
 local taskRunning = false
+--- True only while an agent run owns the request lock, including cleanup.
+function StateManager.isRunActive(): boolean
+	return taskRunning
+end
+
 function StateManager.isBusy(): boolean
 	return busy or taskRunning
 end
@@ -18818,7 +18911,7 @@ return ToolValidator
       <Item class="ModuleScript" referent="57">
         <Properties>
           <string name="Name">WorkspaceInspector</string>
-          <string name="Source">--!strict
+          <string name="Source"><![CDATA[--!strict
 --[[
 	ForgePilot / Roblox / WorkspaceInspector
 	Read-only inspection of the open place.
@@ -18873,7 +18966,7 @@ end
 --=============================================================================
 
 local function describeInstance(instance: Instance, depth: number, budget: { used: number })
-	if budget.used &gt; 12000 then
+	if budget.used > 12000 then
 		return { name = instance.Name, className = instance.ClassName, truncated = true }
 	end
 
@@ -18888,7 +18981,7 @@ local function describeInstance(instance: Instance, depth: number, budget: { use
 		node.material = instance.Material.Name
 		node.color = instance.Color
 		local transparency = instance.Transparency
-		node.transparent = transparency &gt; 0.05
+		node.transparent = transparency > 0.05
 	end
 
 	if instance:IsA("Model") or instance:IsA("Folder") or instance:IsA("Configuration") then
@@ -18896,14 +18989,14 @@ local function describeInstance(instance: Instance, depth: number, budget: { use
 	end
 
 	local children = instance:GetChildren()
-	if depth &lt; LIMITS.MAX_DEPTH and #children &gt; 0 then
+	if depth < LIMITS.MAX_DEPTH and #children > 0 then
 		local list = {}
 		local limit = math.min(#children, LIMITS.MAX_CHILDREN)
 		for index = 1, limit do
 			budget.used += 120
 			list[index] = describeInstance(children[index], depth + 1, budget)
 		end
-		if #children &gt; limit then
+		if #children > limit then
 			list[limit + 1] = { name = string.format("… %d more children", #children - limit), className = "…" }
 		end
 		node.children = list
@@ -18926,7 +19019,7 @@ function WorkspaceInspector.summariseTree(root: Instance?): string
 		total += 1
 		local indent = string.rep("  ", math.min(4, math.floor(#lines / 8)))
 		lines[#lines + 1] = string.format("%s%s (%s)", indent, instance.Name, instance.ClassName)
-		if #lines &gt; LIMITS.MAX_CHILDREN then
+		if #lines > LIMITS.MAX_CHILDREN then
 			return
 		end
 		for _, child in instance:GetChildren() do
@@ -18954,6 +19047,13 @@ local SAFE_PROPERTIES: { [string]: { [string]: any } } = {
 	},
 	Part = { Shape = true, Size = true },
 	Model = { PrimaryPart = "InstanceRef" },
+	Sky = {
+		SkyboxBk = true, SkyboxDn = true, SkyboxFt = true,
+		SkyboxLf = true, SkyboxRt = true, SkyboxUp = true,
+		SkyboxOrientation = true, CelestialBodiesShown = true,
+		StarCount = true, SunAngularSize = true, MoonAngularSize = true,
+		SunTextureId = true, MoonTextureId = true,
+	},
 	Lighting = {
 		Ambient = true,
 		OutdoorAmbient = true,
@@ -18992,7 +19092,7 @@ local function serialiseValue(value: any): string
 	elseif valueType == "number" then
 		return string.format("%.4g", value)
 	elseif valueType == "string" then
-		return string.len(value) &gt; 120 and (string.sub(value, 1, 120) .. "…") or value
+		return string.len(value) > 120 and (string.sub(value, 1, 120) .. "…") or value
 	end
 	return tostring(value)
 end
@@ -19007,35 +19107,34 @@ function WorkspaceInspector.readProperties(instance: Instance): { [string]: stri
 	end
 
 	-- Universal, always-safe attributes.
-	local always = { Name = true, ClassName = true, Archivable = true, Tags = true }
-	for key, value in always do
-		local ok, result = tryRead(instance, key)
-		if ok then
-			out[key] = serialiseValue(result)
+	for _, key in { "Name", "ClassName", "Archivable" } do
+		local value, readError = tryRead(instance, key)
+		if readError == nil then
+			out[key] = serialiseValue(value)
 		end
 	end
-
-	local classRules = SAFE_PROPERTIES[instance.ClassName]
-	if not classRules then
-		for ancestor in instance:GetAncestors() do
-			classRules = SAFE_PROPERTIES[ancestor.ClassName]
-			if classRules then
-				break
-			end
-		end
+	local tagsOk, tags = pcall(instance.GetTags, instance)
+	if tagsOk then
+		table.sort(tags)
+		out.Tags = table.concat(tags, ", ")
 	end
 
-	if classRules then
-		local count = 0
-		for property in pairs(classRules) do
-			if count &gt;= LIMITS.MAX_PROPERTIES then
-				break
-			end
-			local ok, value = tryRead(instance, property)
-			if ok then
-				out[property] = serialiseValue(value)
-				count += 1
-			end
+	-- IsA follows class inheritance. An object's Parent is unrelated to the
+	-- properties it supports (a Sky under Lighting is still a Sky).
+	local classRules: { [string]: boolean } = {}
+	for className, properties in SAFE_PROPERTIES do
+		if instance:IsA(className) then
+			for property in properties do classRules[property] = true end
+		end
+	end
+	local names = {}
+	for property in classRules do names[#names + 1] = property end
+	table.sort(names)
+	for index, property in names do
+		if index > LIMITS.MAX_PROPERTIES then break end
+		local value, readError = tryRead(instance, property)
+		if readError == nil then
+			out[property] = serialiseValue(value)
 		end
 	end
 
@@ -19055,7 +19154,7 @@ function WorkspaceInspector.listChildren(path: string): { { name: string, classN
 	end
 	local list = {}
 	for index, child in instance:GetChildren() do
-		if index &gt; LIMITS.MAX_CHILDREN then
+		if index > LIMITS.MAX_CHILDREN then
 			break
 		end
 		list[#list + 1] = { name = child.Name, className = child.ClassName, path = child:GetFullName() }
@@ -19100,8 +19199,8 @@ function WorkspaceInspector.describeLighting(): { [string]: string }
 	local lighting = game:GetService("Lighting")
 	local properties = SAFE_PROPERTIES.Lighting
 	for property in pairs(properties) do
-		local ok, value = tryRead(lighting, property)
-		if ok then
+		local value, readError = tryRead(lighting, property)
+		if readError == nil then
 			out[property] = serialiseValue(value)
 		end
 	end
@@ -19112,7 +19211,7 @@ function WorkspaceInspector.describeLighting(): { [string]: string }
 			effects[#effects + 1] = child.ClassName .. " (" .. child.Name .. ")"
 		end
 	end
-	if #effects &gt; 0 then
+	if #effects > 0 then
 		out.Effects = table.concat(effects, ", ")
 	end
 	return out
@@ -19131,14 +19230,14 @@ function WorkspaceInspector.describeUI(): { [string]: any }
 		for _, child in playerGui:GetDescendants() do
 			if child:IsA("GuiObject") or child:IsA("LayerCollector") then
 				count += 1
-				if count &lt;= 40 then
+				if count <= 40 then
 					entry.screens[#entry.screens + 1] = string.format("%s (%s)", child.Name, child.ClassName)
 				end
 			end
 		end
 		entry.total = count
 		table.insert(list, entry)
-		if #list &gt;= 10 then
+		if #list >= 10 then
 			break
 		end
 	end
@@ -19179,7 +19278,7 @@ function WorkspaceInspector.countByClass(root: Instance?): { [string]: number }
 	local budget = 0
 	for _, descendant in target:GetDescendants() do
 		budget += 1
-		if budget &gt; 20000 then
+		if budget > 20000 then
 			break
 		end
 		counts[descendant.ClassName] = (counts[descendant.ClassName] or 0) + 1
@@ -19191,18 +19290,19 @@ function WorkspaceInspector.getStats(): { [string]: any }
 	local totalDescendants = 0
 	for _ in workspace:GetDescendants() do
 		totalDescendants += 1
-		if totalDescendants &gt; 50000 then
+		if totalDescendants > 50000 then
 			break
 		end
 	end
 	return {
 		workspaceChildren = #workspace:GetChildren(),
 		workspaceDescendants = totalDescendants,
-		counted = totalDescendants &lt;= 50000,
+		counted = totalDescendants <= 50000,
 	}
 end
 
-return WorkspaceInspector</string>
+return WorkspaceInspector
+]]></string>
         </Properties>
       </Item>
     </Item>
@@ -20485,6 +20585,7 @@ local QuestionCard = require(script.Parent.QuestionCard)
 local RetryStatusUI = require(script.Parent.RetryStatusUI)
 local SessionManager = require(script.Parent.Parent.Core.SessionManager)
 local SettingsManager = require(script.Parent.Parent.Core.SettingsManager)
+local ProviderService = require(script.Parent.Parent.AI.ProviderService)
 local StateManager = require(script.Parent.Parent.Core.StateManager)
 local StreamingManager = require(script.Parent.Parent.AI.StreamingManager)
 local StringUtil = require(script.Parent.Parent.Utilities.StringUtil)
@@ -20516,7 +20617,7 @@ function ChatView.build(parent: GuiObject, hooks: any): (Frame, any)
 	top.Parent = stack
 	local title = Theme.label("New chat", { size = 12, font = Theme.Fonts.Medium, color = Theme.Colors.SecondaryText })
 	title.Name = "ConversationTitle"
-	title.Size = UDim2.new(1, -88, 1, 0)
+	title.Size = UDim2.new(1, -190, 1, 0)
 	title.Position = UDim2.fromOffset(8, 0)
 	title.TextTruncate = Enum.TextTruncate.AtEnd
 	title.Parent = top
@@ -20528,6 +20629,23 @@ function ChatView.build(parent: GuiObject, hooks: any): (Frame, any)
 	newChat.TextColor3 = Theme.Colors.SecondaryText
 	newChat.TextSize = 11
 	newChat.Parent = top
+	local retrySettings = Theme.textButton("Retry: On", { height = 28, width = UDim2.fromOffset(100, 28) })
+	retrySettings.Name = "AutoRetrySettings"
+	retrySettings.AnchorPoint = Vector2.new(1, 0)
+	retrySettings.Position = UDim2.new(1, -82, 0, 0)
+	retrySettings.BackgroundTransparency = 1
+	retrySettings.TextSize = 11
+	retrySettings.Parent = top
+	local function updateRetrySettings()
+		local enabled = ProviderService.getRetryConfig(SettingsManager.getActiveProvider()).enabled
+		retrySettings.Text = if enabled then "Retry: On" else "Retry: Off"
+		retrySettings.TextColor3 = if enabled then Theme.Colors.Highlight else Theme.Colors.SecondaryText
+	end
+	updateRetrySettings()
+	retrySettings.MouseButton1Click:Connect(function()
+		if hooks.onNavigate then hooks.onNavigate("settings") end
+		EventBus.emit(EventBus.Events.Navigate, { section = "settings", tab = "Retry" })
+	end)
 	local accessNotice = Theme.autoText("Local access is disconnected. Web and local files need the bridge. Setup: " .. AccessAdvisor.setupUrl, { size = 11, color = Theme.Extra.Warning })
 	accessNotice.Name = "AccessNotice"
 	accessNotice.LayoutOrder = 1
@@ -20650,9 +20768,9 @@ function ChatView.build(parent: GuiObject, hooks: any): (Frame, any)
 							local card
 							card, retryApi = RetryStatusUI.build({
 								operationId = StateManager.getTaskId() or conversation.id, providerName = profile and profile.displayName or "Provider",
-								model = profile and profile.modelId or "", category = decision.category or "RATE_LIMITED",
+								model = profile and profile.modelId or "", category = decision.category or "UNKNOWN_ERROR",
 								reason = decision.reason or "The provider is temporarily unavailable.",
-								maxRetries = SettingsManager.get().smartRetry.maxRetries,
+								maxRetries = ProviderService.getRetryConfig(profile).maxRetries,
 								providerId = profile and profile.id, endpoint = profile and profile.baseUrl,
 								attempt = attempt, delaySeconds = seconds, paused = false,
 								onCancel = function()
@@ -20666,6 +20784,7 @@ function ChatView.build(parent: GuiObject, hooks: any): (Frame, any)
 							follow = true
 						end
 						retryApi.setAttempt(attempt, seconds)
+						retryApi.setCategory(decision.category or "UNKNOWN_ERROR", decision.message or decision.reason)
 					end,
 					onRetryError = function(normalised: any)
 						if retryApi then retryApi.setCategory(normalised.category, normalised.message) end
@@ -20874,6 +20993,9 @@ function ChatView.build(parent: GuiObject, hooks: any): (Frame, any)
 	end
 	local unsubs = {}
 	unsubs[#unsubs + 1] = EventBus.on("BridgeChanged", function() accessNotice.Visible = not BridgeClient.isConnected() end)
+	unsubs[#unsubs + 1] = EventBus.on(EventBus.Events.ProvidersChanged, updateRetrySettings)
+	unsubs[#unsubs + 1] = EventBus.on(EventBus.Events.RetrySettingsChanged, updateRetrySettings)
+	unsubs[#unsubs + 1] = EventBus.on(EventBus.Events.ActiveProviderChanged, updateRetrySettings)
 	unsubs[#unsubs + 1] = EventBus.on(EventBus.Events.MessageStarted, function(payload)
 		if payload.conversationId == nil or payload.conversationId == SessionManager.getActiveId() then reconcile() end
 	end)
@@ -21483,10 +21605,36 @@ function Components.dropdown(label: string, options: { string }, onSelect: (stri
 	dismiss.Visible = false
 	local host: Frame? = nil
 	local connections: { RBXScriptConnection } = {}
+	local ownerConnections: { RBXScriptConnection } = {}
 	local function close()
 		menu.Visible = false
 		dismiss.Visible = false
+		for _, connection in ownerConnections do connection:Disconnect() end
+		table.clear(ownerConnections)
 		if closeActiveMenu == close then closeActiveMenu = nil end
+	end
+	local function watchOwner()
+		-- The menu is outside its owner in a shared overlay. It must not leave
+		-- an invisible full-panel input blocker after that owner goes away.
+		local ancestor: Instance? = button
+		while ancestor do
+			if ancestor:IsA("GuiObject") then
+				local object = ancestor
+				ownerConnections[#ownerConnections + 1] = object:GetPropertyChangedSignal("Visible"):Connect(function()
+					if not object.Visible then close() end
+				end)
+				ownerConnections[#ownerConnections + 1] = object:GetPropertyChangedSignal("Interactable"):Connect(function()
+					if not object.Interactable then close() end
+				end)
+			elseif ancestor:IsA("LayerCollector") then
+				local layer = ancestor
+				ownerConnections[#ownerConnections + 1] = layer:GetPropertyChangedSignal("Enabled"):Connect(function()
+					if not layer.Enabled then close() end
+				end)
+			end
+			ownerConnections[#ownerConnections + 1] = ancestor.AncestryChanged:Connect(close)
+			ancestor = ancestor.Parent
+		end
 	end
 	local function place()
 		if not host then return end
@@ -21525,6 +21673,7 @@ function Components.dropdown(label: string, options: { string }, onSelect: (stri
 		end
 	end
 	button.MouseButton1Click:Connect(function()
+		if not button.Interactable or not row.Parent then return end
 		if menu.Visible then close(); return end
 		Components.closeMenus()
 		host = Theme.overlayHost(row)
@@ -21538,6 +21687,7 @@ function Components.dropdown(label: string, options: { string }, onSelect: (stri
 		dismiss.Visible = true
 		menu.Visible = true
 		closeActiveMenu = close
+		watchOwner()
 	end)
 	dismiss.MouseButton1Click:Connect(close)
 	connections[#connections + 1] = button:GetPropertyChangedSignal("AbsolutePosition"):Connect(function() if menu.Visible then place() end end)
@@ -24195,7 +24345,10 @@ function ProviderView.build(parent: GuiObject): (Frame, any)
 	testResult.Parent = actionsCard2
 
 	local function syncFooterStatus()
-		if testResult.Text ~= "" then
+		if StateManager.isBusy() and not probeBusy then
+			footerStatus.Text = "Chat in progress · Settings unlock when the task finishes."
+			footerStatus.TextColor3 = Theme.Extra.Warning
+		elseif testResult.Text ~= "" then
 			footerStatus.Text = string.match(testResult.Text, "[^\n]+") or testResult.Text
 			footerStatus.TextColor3 = testResult.TextColor3
 		else
@@ -24393,14 +24546,15 @@ function ProviderView.build(parent: GuiObject): (Frame, any)
 	--=========================================================================
 
 	local function setBusy(value: boolean)
-		probeBusy = value
-		busy = value or StateManager.isBusy()
+		probeBusy = value or operation ~= nil
+		busy = probeBusy or StateManager.isBusy()
 		if busy then Components.closeMenus() end
 		for _, control in view:GetDescendants() do
 			if control:IsA("GuiButton") then control.Interactable = not busy
 			elseif control:IsA("TextBox") then control.TextEditable = not busy end
 		end
 		testButton.Interactable = if probeBusy then not (operation and operation.cancelled) else not busy
+		syncFooterStatus()
 	end
 
 	local function restoreTestControls()
@@ -24448,7 +24602,7 @@ function ProviderView.build(parent: GuiObject): (Frame, any)
 		operation = token
 		local profile = table.clone(draft)
 		profile.timeoutMs = math.min(profile.timeoutMs or 120000, 15000)
-		profile.retryOverrides = { enabled = false, maxRetries = 0, rateLimitScheduler = false }
+		profile.retryOverrides = { enabled = false, maxRetries = 0, dynamicCooldown = false }
 		local function shouldCancel(): boolean
 			return destroyed or token.cancelled or operation ~= token or os.clock() >= token.deadline
 		end
@@ -26369,29 +26523,26 @@ function SettingsView.build(parent: GuiObject): (Frame, any)
 	-- SMART AUTO RETRY
 	--=========================================================================
 
-	local function numberRow(parent: Instance, label: string, value: number, hint: string?, order: number): (TextBox, (number) -> ())
+	local function numberRow(parent: Instance, label: string, key: string, value: number, hint: string?, order: number): (TextBox, (number) -> ())
 		local row, holder = Components.field(label, { hint = hint })
 		row.LayoutOrder = order
 		local box = Theme.input(tostring(value))
 		box.Name = "Input"
+		box:SetAttribute("RetrySetting", key)
 		box.Size = UDim2.fromOffset(110, Theme.Metrics.InputHeight)
 		box.Parent = holder
 
 		local function commit()
 			local parsed = tonumber(box.Text)
 			if parsed then
-				SmartRetry.set(label, math.clamp(parsed, 0, 3600))
-				box.Text = tostring(SmartRetry.get(label))
+				SmartRetry.set(key, parsed)
+				box.Text = tostring(SmartRetry.get(key))
 			else
-				box.Text = tostring(SmartRetry.get(label))
+				box.Text = tostring(SmartRetry.get(key))
 			end
 		end
 
-		box.FocusLost:Connect(function(enterPressed)
-			if enterPressed then
-				commit()
-			end
-		end)
+		box.FocusLost:Connect(commit)
 
 		row.Parent = parent
 		return box, commit
@@ -26413,7 +26564,7 @@ function SettingsView.build(parent: GuiObject): (Frame, any)
 		Theme.listLayout(10).Parent = scroll
 
 		local card1, body1 = Components.section("Smart Auto Retry", {
-			subtitle = "One retry controller runs per operation, so retry loops can never nest.",
+			subtitle = "Retries temporary provider failures in chat and streaming. OpenCode preset: 2s base, doubling, 25% jitter, 30s fallback cap. Stop cancels the wait.",
 			order = 1,
 		})
 		card1.Parent = scroll
@@ -26428,28 +26579,30 @@ function SettingsView.build(parent: GuiObject): (Frame, any)
 		)
 		enabledRow.Parent = body1
 
-		local strategyField = Components.dropdown(
+		local strategyField, _, _, selectStrategy = Components.dropdown(
 			"Retry Strategy",
-			{ "Adaptive Smart Retry", "Exponential", "Linear", "Custom sequence" },
+			{ "OpenCode", "Adaptive Smart Retry", "Exponential", "Linear", "Custom sequence" },
 			function(selected)
-				local key = if selected == "Adaptive Smart Retry"
+				local key = if selected == "OpenCode" then "opencode" elseif selected == "Adaptive Smart Retry"
 					then "adaptive"
 					elseif selected == "Linear" then "linear" elseif selected == "Custom sequence" then "custom" else "exponential"
 				SmartRetry.set("strategy", key)
 				schedulePreview.Text = SmartRetry.describe()
 			end
 		)
+		local strategyLabels = { opencode = "OpenCode", adaptive = "Adaptive Smart Retry", exponential = "Exponential", linear = "Linear", custom = "Custom sequence" }
+		selectStrategy(strategyLabels[SmartRetry.get("strategy")] or "OpenCode")
 		strategyField.Parent = body1
 
-		numberRow(body1, "Maximum Retries", SmartRetry.get("maxRetries") or 5, "Additional attempts after the first request.", 3)
-		numberRow(body1, "Initial Delay (s)", SmartRetry.get("initialDelaySeconds") or 2, nil, 4)
-		numberRow(body1, "Backoff Multiplier", SmartRetry.get("multiplier") or 2, "Exponential growth per retry.", 5)
-		numberRow(body1, "Linear Step (s)", SmartRetry.get("linearStepSeconds") or 3, "Used by the Linear strategy.", 6)
-		numberRow(body1, "Maximum Delay (s)", SmartRetry.get("maxDelaySeconds") or 120, nil, 7)
-		numberRow(body1, "Maximum Automatic Wait (s)", SmartRetry.get("maxAutoWaitSeconds") or 120,
+		numberRow(body1, "Maximum Retries", "maxRetries", SmartRetry.get("maxRetries") or 5, "Additional attempts after the first request; default 5. Applies to every strategy.", 3)
+		numberRow(body1, "Initial Delay (s)", "initialDelaySeconds", SmartRetry.get("initialDelaySeconds") or 2, "Used by Adaptive, Exponential and Linear. OpenCode uses 2s.", 4)
+		numberRow(body1, "Backoff Multiplier", "multiplier", SmartRetry.get("multiplier") or 2, "Adaptive and Exponential growth. OpenCode uses 2.", 5)
+		numberRow(body1, "Linear Step (s)", "linearStepSeconds", SmartRetry.get("linearStepSeconds") or 3, "Used by the Linear strategy.", 6)
+		numberRow(body1, "Maximum Delay (s)", "maxDelaySeconds", SmartRetry.get("maxDelaySeconds") or 120, "Caps local backoff; OpenCode also caps it at 30s. Provider cooldowns are respected.", 7)
+		numberRow(body1, "Maximum Automatic Wait (s)", "maxAutoWaitSeconds", SmartRetry.get("maxAutoWaitSeconds") or 120,
 			"Past this, retries PAUSE rather than violating a provider cooldown.", 8)
-		numberRow(body1, "Jitter (%)", SmartRetry.get("jitterPercent") or 25,
-			"Randomised spread applied to non-mandatory waits.", 9)
+		numberRow(body1, "Jitter (%)", "jitterPercent", SmartRetry.get("jitterPercent") or 25,
+			"Randomised local waits. OpenCode uses up to 25% extra time.", 9)
 
 		local customRow, customHolder = Components.field("Custom Delay Sequence", {
 			hint = "Comma-separated seconds, used when the Custom strategy is selected. Example: 3, 6, 12, 30, 60",
@@ -26562,7 +26715,10 @@ function SettingsView.build(parent: GuiObject): (Frame, any)
 			for attempt = 1, math.min(5, config.maxRetries) do
 				local seconds: number
 				local source: string
-				if config.strategy == "linear" then
+				if config.strategy == "opencode" then
+					seconds = math.min(30, config.maxDelaySeconds, 2 * 2 ^ (attempt - 1))
+					source = "OpenCode base"
+				elseif config.strategy == "linear" then
 					seconds = RetryDelayCalculator.linear(attempt, config)
 					source = "linear"
 				elseif config.strategy == "custom" then
@@ -26574,13 +26730,13 @@ function SettingsView.build(parent: GuiObject): (Frame, any)
 				end
 				lines[#lines + 1] = string.format("Retry %d: %.0fs (%s)", attempt, seconds, source)
 			end
-			if #lines == 0 then
+			if not config.enabled or #lines == 0 then
 				lines[1] = "Automatic retry is disabled."
 			end
 			schedulePreview.Text = table.concat(lines, "\n")
 				.. string.format(
 					"\n\nJitter: %.0f%% · Mandatory provider waits are never shortened by jitter.",
-					config.jitterPercent
+					if config.strategy == "opencode" then 25 else config.jitterPercent
 				)
 		end
 
@@ -28293,6 +28449,26 @@ function Icons.brandMark(size: number): Frame
 		Rotation = 45,
 	})
 	spark.BackgroundColor3 = BRAND_COLOR:Lerp(Color3.new(1, 1, 1), 0.45)
+
+	-- Reuse the published thumbnail; assets contains the original 512px PNG.
+	-- The native mark remains visible while the image loads or when offline.
+	local fallback = root:GetChildren()
+	local image = Instance.new("ImageLabel")
+	image.Name = "PluginIcon"
+	image.BackgroundTransparency = 1
+	image.Size = UDim2.fromScale(1, 1)
+	image.Image = "rbxthumb://type=Asset&id=82058489576798&w=150&h=150"
+	image.ScaleType = Enum.ScaleType.Fit
+	image.Visible = image.IsLoaded == true
+	image.Parent = root
+	Theme.corner(math.max(2, math.floor(s * 0.15))).Parent = image
+	local function refresh()
+		local loaded = image.IsLoaded == true
+		image.Visible = loaded
+		for _, child in fallback do if child:IsA("GuiObject") then child.Visible = not loaded end end
+	end
+	image:GetPropertyChangedSignal("IsLoaded"):Connect(refresh)
+	refresh()
 
 	return root
 end
@@ -30030,7 +30206,7 @@ return UIHealthCheck
       <Item class="ModuleScript" referent="91">
         <Properties>
           <string name="Name">UniversalErrorDetector</string>
-          <string name="Source">--!strict
+          <string name="Source"><![CDATA[--!strict
 local HttpService = game:GetService("HttpService")
 --[[
 	ForgePilot / Utilities / UniversalErrorDetector
@@ -30400,12 +30576,12 @@ local TIME_UNITS: { [string]: number } = {
 	["año"] = 31536000 * 1000,
 }
 
---- Extracts "&lt;limit&gt; per &lt;window&gt;" from a localized message.
+--- Extracts "<limit> per <window>" from a localized message.
 --- Handles "5 requests per 60 seconds", "5 requests/minute",
 --- "1分钟内最多请求5次" and "最多5次/分钟".
 -- CJK forms put the LIMIT after an "at most" marker and the WINDOW before it:
---   "1分钟内最多请求5次"  -&gt; 5 requests per 1 minute
---   "每分钟最多5次"       -&gt; 5 requests per 1 minute
+--   "1分钟内最多请求5次"  -> 5 requests per 1 minute
+--   "每分钟最多5次"       -> 5 requests per 1 minute
 -- The marker is located with plain finds so multi-byte text is never put into a
 -- character class, and the containment suffix is trimmed by byte length.
 local CONTAINMENT_IN = string.byte("内")
@@ -30415,9 +30591,9 @@ local function trimContainment(unit: string): string
 	local trimmed = unit
 	while true do
 		local length = #trimmed
-		if length &gt;= 6 and string.byte(trimmed, length - 5) == CONTAINMENT_YI and string.byte(trimmed, length - 2) == CONTAINMENT_IN then
+		if length >= 6 and string.byte(trimmed, length - 5) == CONTAINMENT_YI and string.byte(trimmed, length - 2) == CONTAINMENT_IN then
 			trimmed = string.sub(trimmed, 1, length - 6)
-		elseif length &gt;= 3 and string.byte(trimmed, length - 2) == CONTAINMENT_IN then
+		elseif length >= 3 and string.byte(trimmed, length - 2) == CONTAINMENT_IN then
 			trimmed = string.sub(trimmed, 1, length - 3)
 		else
 			return trimmed
@@ -30491,11 +30667,11 @@ local function parseCjkWindow(lowered: string, raw: string): RateWindow?
 
 	local before = string.sub(lowered, 1, markerStart - 1)
 
-	-- "每&lt;unit&gt;最多N次": no number sits between 每 and the marker.
+	-- "每<unit>最多N次": no number sits between 每 and the marker.
 	local perStart, perEnd = lastPlainFind(before, "每")
 	local numberText, _, numberEnd = lastNumber(before)
 
-	if perStart and (not numberText or numberEnd &lt; perEnd) then
+	if perStart and (not numberText or numberEnd < perEnd) then
 		local unit = trimContainment(string.sub(before, perEnd + 1))
 		local ms = TIME_UNITS[unit]
 		if ms then
@@ -30504,7 +30680,7 @@ local function parseCjkWindow(lowered: string, raw: string): RateWindow?
 		return nil
 	end
 
-	-- "&lt;N&gt;&lt;unit&gt;以内最多请求&lt;M&gt;次": the window number is the LAST number before
+	-- "<N><unit>以内最多请求<M>次": the window number is the LAST number before
 	-- the marker, and the unit plus containment word follow it.
 	if not numberText then
 		return nil
@@ -30565,7 +30741,7 @@ end
 function UniversalErrorDetector.extractMessage(body: any): string?
 	local decoded = decodeErrorBody(body)
 	if decoded == nil then
-		if type(body) == "string" and #body &gt; 0 and #body &lt; 2000 then
+		if type(body) == "string" and #body > 0 and #body < 2000 then
 			return body
 		end
 		return nil
@@ -30573,7 +30749,7 @@ function UniversalErrorDetector.extractMessage(body: any): string?
 
 	local cursor = decoded
 	local depth = 0
-	while type(cursor) == "table" and depth &lt; 6 do
+	while type(cursor) == "table" and depth < 6 do
 		local err = cursor.error
 		if type(err) == "string" then
 			return err
@@ -30638,13 +30814,13 @@ function UniversalErrorDetector.extractCode(body: any): string?
 	-- Breadth-first so a top-level code always wins over a nested one.
 	local queue: { any } = { decoded }
 	local seen = 0
-	while #queue &gt; 0 and seen &lt; 24 do
+	while #queue > 0 and seen < 24 do
 		local node = table.remove(queue, 1)
 		seen += 1
 		if type(node) == "table" then
 			for _, field in FIELDS do
 				local value = node[field]
-				if type(value) == "string" and #value &gt; 0 then
+				if type(value) == "string" and #value > 0 then
 					return value
 				end
 				if type(value) == "number" then
@@ -30734,25 +30910,28 @@ function UniversalErrorDetector.classify(input: Input): Classification
 	result.rateWindow = UniversalErrorDetector.parseRateWindow(input.body or "")
 
 	-- 0. Transport failures (no HTTP response at all).
-	if input.transportError then
+	if input.transportError and (input.statusCode == nil or input.statusCode < 400) then
 		local text = string.lower(input.transportError)
+		if string.find(text, "is not a valid member", 1, true)
+			or string.find(text, "stream processing failed", 1, true)
+			or string.find(text, "could not build the request", 1, true)
+		then
+			result.category = "INVALID_REQUEST"
+			result.source = "local_error"
+			result.message = Redact.scrubText(input.transportError)
+			result.confidence = 0.95
+			return result
+		end
 		if string.find(text, "timed out", 1, true) or string.find(text, "timeout", 1, true) then
 			result.category = "TIMEOUT"
 			result.source = "transport_error"
 			result.confidence = 0.95
 			return result
 		end
-		result.category = "NETWORK_ERROR"
+		result.category = if input.streamInterrupted then "STREAM_INTERRUPTED" else "NETWORK_ERROR"
 		result.source = "transport_error"
 		result.confidence = 0.8
 		result.message = Redact.scrubText(input.transportError)
-		return result
-	end
-
-	if input.streamInterrupted then
-		result.category = "STREAM_INTERRUPTED"
-		result.source = "stream_state"
-		result.confidence = 0.9
 		return result
 	end
 
@@ -30807,7 +30986,7 @@ function UniversalErrorDetector.classify(input: Input): Classification
 			result.confidence = 0.8
 			return result
 		end
-		if status &gt;= 500 and status &lt; 600 then
+		if status >= 500 and status < 600 then
 			result.category = "SERVER_ERROR"
 			result.source = "http_status"
 			result.confidence = 0.85
@@ -30860,7 +31039,7 @@ function UniversalErrorDetector.classify(input: Input): Classification
 
 	-- 5/6. Multilingual message classification.
 	local haystack = normaliseMessage(input.body) .. " " .. normaliseMessage(result.message)
-	if #haystack &gt; 1 then
+	if #haystack > 1 then
 		for _, group in GROUPS do
 			for _, row in group.rows do
 				if matches(haystack, row.pattern) then
@@ -30873,8 +31052,15 @@ function UniversalErrorDetector.classify(input: Input): Classification
 		end
 	end
 
+	if input.streamInterrupted and (status == nil or status < 400) then
+		result.category = "STREAM_INTERRUPTED"
+		result.source = "stream_state"
+		result.confidence = 0.9
+		return result
+	end
+
 	-- 7. Unknown fallback.
-	if status ~= nil and status &gt;= 400 then
+	if status ~= nil and status >= 400 then
 		result.source = "http_status_unknown"
 		result.confidence = 0.4
 	end
@@ -30889,7 +31075,8 @@ function UniversalErrorDetector.isRetryable(category: Category): boolean
 	return UniversalErrorDetector.RETRYABLE[category] == true
 end
 
-return UniversalErrorDetector</string>
+return UniversalErrorDetector
+]]></string>
         </Properties>
       </Item>
       <Item class="ModuleScript" referent="92">
@@ -31187,9 +31374,10 @@ end
 export type StreamCallbacks = {
 	onActivity: (() -> ())?,
 	onOpen: ((statusCode: number?, headers: Headers) -> ())?,
+	onActivity: (() -> ())?,
 	onChunk: ((chunk: string) -> ())?,
 	onComplete: ((body: string, durationMs: number, requestId: string?) -> ())?,
-	onError: ((message: string) -> ())?,
+	onError: ((message: string, info: any?) -> ())?,
 }
 
 export type StreamHandle = {
@@ -31272,13 +31460,13 @@ function UniversalHTTPClient.stream(request: {
 		end
 	end
 
-	local function finishError(message: string)
+	local function finishError(message: string, info: any?)
 		if finished or cancelled then
 			return
 		end
 		finished = true
 		safeClose()
-		if callbacks.onError then pcall(callbacks.onError, message) end
+		if callbacks.onError then pcall(callbacks.onError, message, info) end
 	end
 
 	-- Idle watchdog: a provider that accepts the connection and then goes quiet.
@@ -31313,7 +31501,9 @@ function UniversalHTTPClient.stream(request: {
 	end)
 
 	client.Error:Connect(function(status, message)
-		finishError(if type(message) == "string" then ("HTTP " .. tostring(status) .. ": " .. message) else ErrorHandler.describe(status))
+		finishError(if type(message) == "string" then ("HTTP " .. tostring(status) .. ": " .. message) else ErrorHandler.describe(status), {
+			statusCode = tonumber(status), body = if type(message) == "string" then message else nil,
+		})
 	end)
 
 	client.Closed:Connect(function()

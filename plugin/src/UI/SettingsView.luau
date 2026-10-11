@@ -315,29 +315,26 @@ function SettingsView.build(parent: GuiObject): (Frame, any)
 	-- SMART AUTO RETRY
 	--=========================================================================
 
-	local function numberRow(parent: Instance, label: string, value: number, hint: string?, order: number): (TextBox, (number) -> ())
+	local function numberRow(parent: Instance, label: string, key: string, value: number, hint: string?, order: number): (TextBox, (number) -> ())
 		local row, holder = Components.field(label, { hint = hint })
 		row.LayoutOrder = order
 		local box = Theme.input(tostring(value))
 		box.Name = "Input"
+		box:SetAttribute("RetrySetting", key)
 		box.Size = UDim2.fromOffset(110, Theme.Metrics.InputHeight)
 		box.Parent = holder
 
 		local function commit()
 			local parsed = tonumber(box.Text)
 			if parsed then
-				SmartRetry.set(label, math.clamp(parsed, 0, 3600))
-				box.Text = tostring(SmartRetry.get(label))
+				SmartRetry.set(key, parsed)
+				box.Text = tostring(SmartRetry.get(key))
 			else
-				box.Text = tostring(SmartRetry.get(label))
+				box.Text = tostring(SmartRetry.get(key))
 			end
 		end
 
-		box.FocusLost:Connect(function(enterPressed)
-			if enterPressed then
-				commit()
-			end
-		end)
+		box.FocusLost:Connect(commit)
 
 		row.Parent = parent
 		return box, commit
@@ -359,7 +356,7 @@ function SettingsView.build(parent: GuiObject): (Frame, any)
 		Theme.listLayout(10).Parent = scroll
 
 		local card1, body1 = Components.section("Smart Auto Retry", {
-			subtitle = "One retry controller runs per operation, so retry loops can never nest.",
+			subtitle = "Retries temporary provider failures in chat and streaming. OpenCode preset: 2s base, doubling, 25% jitter, 30s fallback cap. Stop cancels the wait.",
 			order = 1,
 		})
 		card1.Parent = scroll
@@ -374,28 +371,30 @@ function SettingsView.build(parent: GuiObject): (Frame, any)
 		)
 		enabledRow.Parent = body1
 
-		local strategyField = Components.dropdown(
+		local strategyField, _, _, selectStrategy = Components.dropdown(
 			"Retry Strategy",
-			{ "Adaptive Smart Retry", "Exponential", "Linear", "Custom sequence" },
+			{ "OpenCode", "Adaptive Smart Retry", "Exponential", "Linear", "Custom sequence" },
 			function(selected)
-				local key = if selected == "Adaptive Smart Retry"
+				local key = if selected == "OpenCode" then "opencode" elseif selected == "Adaptive Smart Retry"
 					then "adaptive"
 					elseif selected == "Linear" then "linear" elseif selected == "Custom sequence" then "custom" else "exponential"
 				SmartRetry.set("strategy", key)
 				schedulePreview.Text = SmartRetry.describe()
 			end
 		)
+		local strategyLabels = { opencode = "OpenCode", adaptive = "Adaptive Smart Retry", exponential = "Exponential", linear = "Linear", custom = "Custom sequence" }
+		selectStrategy(strategyLabels[SmartRetry.get("strategy")] or "OpenCode")
 		strategyField.Parent = body1
 
-		numberRow(body1, "Maximum Retries", SmartRetry.get("maxRetries") or 5, "Additional attempts after the first request.", 3)
-		numberRow(body1, "Initial Delay (s)", SmartRetry.get("initialDelaySeconds") or 2, nil, 4)
-		numberRow(body1, "Backoff Multiplier", SmartRetry.get("multiplier") or 2, "Exponential growth per retry.", 5)
-		numberRow(body1, "Linear Step (s)", SmartRetry.get("linearStepSeconds") or 3, "Used by the Linear strategy.", 6)
-		numberRow(body1, "Maximum Delay (s)", SmartRetry.get("maxDelaySeconds") or 120, nil, 7)
-		numberRow(body1, "Maximum Automatic Wait (s)", SmartRetry.get("maxAutoWaitSeconds") or 120,
+		numberRow(body1, "Maximum Retries", "maxRetries", SmartRetry.get("maxRetries") or 5, "Additional attempts after the first request; default 5. Applies to every strategy.", 3)
+		numberRow(body1, "Initial Delay (s)", "initialDelaySeconds", SmartRetry.get("initialDelaySeconds") or 2, "Used by Adaptive, Exponential and Linear. OpenCode uses 2s.", 4)
+		numberRow(body1, "Backoff Multiplier", "multiplier", SmartRetry.get("multiplier") or 2, "Adaptive and Exponential growth. OpenCode uses 2.", 5)
+		numberRow(body1, "Linear Step (s)", "linearStepSeconds", SmartRetry.get("linearStepSeconds") or 3, "Used by the Linear strategy.", 6)
+		numberRow(body1, "Maximum Delay (s)", "maxDelaySeconds", SmartRetry.get("maxDelaySeconds") or 120, "Caps local backoff; OpenCode also caps it at 30s. Provider cooldowns are respected.", 7)
+		numberRow(body1, "Maximum Automatic Wait (s)", "maxAutoWaitSeconds", SmartRetry.get("maxAutoWaitSeconds") or 120,
 			"Past this, retries PAUSE rather than violating a provider cooldown.", 8)
-		numberRow(body1, "Jitter (%)", SmartRetry.get("jitterPercent") or 25,
-			"Randomised spread applied to non-mandatory waits.", 9)
+		numberRow(body1, "Jitter (%)", "jitterPercent", SmartRetry.get("jitterPercent") or 25,
+			"Randomised local waits. OpenCode uses up to 25% extra time.", 9)
 
 		local customRow, customHolder = Components.field("Custom Delay Sequence", {
 			hint = "Comma-separated seconds, used when the Custom strategy is selected. Example: 3, 6, 12, 30, 60",
@@ -508,7 +507,10 @@ function SettingsView.build(parent: GuiObject): (Frame, any)
 			for attempt = 1, math.min(5, config.maxRetries) do
 				local seconds: number
 				local source: string
-				if config.strategy == "linear" then
+				if config.strategy == "opencode" then
+					seconds = math.min(30, config.maxDelaySeconds, 2 * 2 ^ (attempt - 1))
+					source = "OpenCode base"
+				elseif config.strategy == "linear" then
 					seconds = RetryDelayCalculator.linear(attempt, config)
 					source = "linear"
 				elseif config.strategy == "custom" then
@@ -520,13 +522,13 @@ function SettingsView.build(parent: GuiObject): (Frame, any)
 				end
 				lines[#lines + 1] = string.format("Retry %d: %.0fs (%s)", attempt, seconds, source)
 			end
-			if #lines == 0 then
+			if not config.enabled or #lines == 0 then
 				lines[1] = "Automatic retry is disabled."
 			end
 			schedulePreview.Text = table.concat(lines, "\n")
 				.. string.format(
 					"\n\nJitter: %.0f%% · Mandatory provider waits are never shortened by jitter.",
-					config.jitterPercent
+					if config.strategy == "opencode" then 25 else config.jitterPercent
 				)
 		end
 

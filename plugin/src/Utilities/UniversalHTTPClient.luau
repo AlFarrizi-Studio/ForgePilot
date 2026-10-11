@@ -290,9 +290,10 @@ end
 export type StreamCallbacks = {
 	onActivity: (() -> ())?,
 	onOpen: ((statusCode: number?, headers: Headers) -> ())?,
+	onActivity: (() -> ())?,
 	onChunk: ((chunk: string) -> ())?,
 	onComplete: ((body: string, durationMs: number, requestId: string?) -> ())?,
-	onError: ((message: string) -> ())?,
+	onError: ((message: string, info: any?) -> ())?,
 }
 
 export type StreamHandle = {
@@ -375,13 +376,13 @@ function UniversalHTTPClient.stream(request: {
 		end
 	end
 
-	local function finishError(message: string)
+	local function finishError(message: string, info: any?)
 		if finished or cancelled then
 			return
 		end
 		finished = true
 		safeClose()
-		if callbacks.onError then pcall(callbacks.onError, message) end
+		if callbacks.onError then pcall(callbacks.onError, message, info) end
 	end
 
 	-- Idle watchdog: a provider that accepts the connection and then goes quiet.
@@ -416,7 +417,9 @@ function UniversalHTTPClient.stream(request: {
 	end)
 
 	client.Error:Connect(function(status, message)
-		finishError(if type(message) == "string" then ("HTTP " .. tostring(status) .. ": " .. message) else ErrorHandler.describe(status))
+		finishError(if type(message) == "string" then ("HTTP " .. tostring(status) .. ": " .. message) else ErrorHandler.describe(status), {
+			statusCode = tonumber(status), body = if type(message) == "string" then message else nil,
+		})
 	end)
 
 	client.Closed:Connect(function()

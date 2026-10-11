@@ -339,6 +339,26 @@ function Icons.brandMark(size: number): Frame
 	})
 	spark.BackgroundColor3 = BRAND_COLOR:Lerp(Color3.new(1, 1, 1), 0.45)
 
+	-- Reuse the published thumbnail; assets contains the original 512px PNG.
+	-- The native mark remains visible while the image loads or when offline.
+	local fallback = root:GetChildren()
+	local image = Instance.new("ImageLabel")
+	image.Name = "PluginIcon"
+	image.BackgroundTransparency = 1
+	image.Size = UDim2.fromScale(1, 1)
+	image.Image = "rbxthumb://type=Asset&id=82058489576798&w=150&h=150"
+	image.ScaleType = Enum.ScaleType.Fit
+	image.Visible = image.IsLoaded == true
+	image.Parent = root
+	Theme.corner(math.max(2, math.floor(s * 0.15))).Parent = image
+	local function refresh()
+		local loaded = image.IsLoaded == true
+		image.Visible = loaded
+		for _, child in fallback do if child:IsA("GuiObject") then child.Visible = not loaded end end
+	end
+	image:GetPropertyChangedSignal("IsLoaded"):Connect(refresh)
+	refresh()
+
 	return root
 end
 

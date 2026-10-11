@@ -45,7 +45,7 @@ local toolbar = plugin:CreateToolbar("ForgePilot")
 local button = toolbar:CreateButton(
 	"ForgePilot",
 	"Open the ForgePilot AI assistant",
-	"rbxassetid://14978048121"
+	"rbxthumb://type=Asset&id=82058489576798&w=150&h=150"
 )
 button.ClickableWhenViewportHidden = true
 print("[ForgePilot] Toolbar button created")

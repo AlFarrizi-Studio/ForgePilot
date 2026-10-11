@@ -112,6 +112,7 @@ function BridgeClient.stream(request: any, callbacks: any): (any?, string?)
     local idleSeconds = math.clamp((request.timeoutMs or 120000) / 1000, 1, 600)
     local lastActivity = started
     local activitySequence: number? = nil
+    local opened = false
     local collected = {}
     local function release()
         if released then return end
@@ -136,6 +137,10 @@ function BridgeClient.stream(request: any, callbacks: any): (any?, string?)
                 local value, problem = BridgeClient.request("/stream/" .. job.id .. "?cursor=" .. tostring(cursor), nil, "GET", math.min(15, math.max(1, idleSeconds - (os.clock() - lastActivity))), function() return cancelled end)
                 if cancelled or done then break end
                 if not value then reportError(problem or "Bridge stream failed."); break end
+                if not opened and type(value.statusCode) == "number" then
+                    opened = true
+                    if callbacks.onOpen then callbacks.onOpen(value.statusCode, value.headers or {}) end
+                end
                 if type(value.activitySequence) == "number" and value.activitySequence ~= activitySequence then
                     activitySequence = value.activitySequence
                     lastActivity = os.clock()
@@ -155,7 +160,7 @@ function BridgeClient.stream(request: any, callbacks: any): (any?, string?)
                     done = true
                     release()
                     if value.error then
-                        if callbacks.onError then pcall(callbacks.onError, value.error) end
+                        if callbacks.onError then pcall(callbacks.onError, value.error, { statusCode = value.statusCode, headers = value.headers, body = value.errorBody }) end
                     elseif callbacks.onComplete then
                         callbacks.onComplete(table.concat(collected), (os.clock() - started) * 1000, value.statusCode)
                     end
