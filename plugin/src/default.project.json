@@ -1,0 +1,11 @@
+{
+  "name": "ForgePilot",
+  "tree": {
+    "$path": "Main.plugin.luau",
+    "Core": { "$path": "Core" },
+    "AI": { "$path": "AI" },
+    "UI": { "$path": "UI" },
+    "Roblox": { "$path": "Roblox" },
+    "Utilities": { "$path": "Utilities" }
+  }
+}
