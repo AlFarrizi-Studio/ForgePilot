@@ -25,5 +25,6 @@ tests=tests.replace("local controller=module('Core/ApplicationController')",(bas
 tests=tests.replace("local controller=module('Core/ApplicationController')",(base/'tests'/'luau'/'release_regression_tests.luau').read_text()+"\nlocal controller=module('Core/ApplicationController')")
 tests=tests.replace("local controller=module('Core/ApplicationController')",(base/'tests'/'luau'/'patch_regression_tests.luau').read_text()+"\nlocal controller=module('Core/ApplicationController')")
 tests=tests.replace("local controller=module('Core/ApplicationController')",(base/'tests'/'luau'/'provider_freeze_regression_tests.luau').read_text()+"\nlocal controller=module('Core/ApplicationController')")
+tests=tests.replace("local controller=module('Core/ApplicationController')",(base/'tests'/'luau'/'chat_controls_regression_tests.luau').read_text()+"\nlocal controller=module('Core/ApplicationController')")
 out.write_text('local classes='+literal(classes)+'\nlocal enums='+literal(enums)+'\nlocal sources='+literal(sources)+'\n'+(base/'tests'/'luau'/'mock_engine.luau').read_text()+'\n'+tests)
 print(out)

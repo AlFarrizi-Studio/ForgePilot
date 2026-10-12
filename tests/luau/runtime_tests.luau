@@ -5,6 +5,16 @@ local State=module('Core/StateManager')
 local Theme=module('Utilities/Theme')
 local Components=module('UI/Components')
 local Agent=module('AI/AgentController')
+-- Studio scripts run on scheduled threads. Await the real agent through the
+-- mock scheduler so long tool tasks can yield and still accept Stop/UI input.
+local function runAgentTask(options)
+ local result=nil
+ taskMock.spawn(function()result=Agent.runTask(options)end)
+ local deadline=now+600
+ while not result and now<deadline do advance(.1)end
+ assert(result,'Agent fixture did not finish within its test deadline')
+ return result
+end
 for path in sources do
  if not path:find('Main.plugin',1,true) then
   local ok,err=pcall(module,path);check('load '..path,ok,err)
@@ -109,7 +119,7 @@ check('Stop releases a pending question',questionReturned and questionManager.ge
 State.reset();Settings.setActiveProvider(profile.id)
 local exceptionConversation=Sessions.createConversation();Sessions.addMessage('user','Trigger a failure')
 Agent.sendTurn=function() error('Mock transport failure') end
-local exceptionResult=Agent.runTask({userText='Trigger a failure',mode='plan',conversation=exceptionConversation})
+local exceptionResult=runAgentTask({userText='Trigger a failure',mode='plan',conversation=exceptionConversation})
 check('unexpected errors release request lock',not exceptionResult.ok and not State.isBusy() and State.get()=='FAILED')
 check('unexpected errors finalize assistant placeholder',exceptionConversation.messages[2].streaming==false and exceptionConversation.messages[2].error~=nil)
 State.reset();profile.toolCalling=true
@@ -128,7 +138,7 @@ Agent.sendTurn=function(_,spec,_,callbacks)
  callbacks.onDelta('The inspection failed.','text')
  return {text='The inspection failed.',reasoning='',toolCalls={},durationMs=1,cancelled=false}
 end
-local multiResult=Agent.runTask({userText='Inspect then answer',mode='plan',conversation=multiConversation})
+local multiResult=runAgentTask({userText='Inspect then answer',mode='plan',conversation=multiConversation})
 check('each tool round owns a separate assistant message',multiResult.ok and #multiConversation.messages==4 and multiConversation.messages[2].content=='Checking the project.' and multiConversation.messages[4].content=='The inspection failed.',jsonEncode({result=multiResult,messages=multiConversation.messages}))
 check('native followup request retains tool call id',nativePair and multiConversation.messages[3].toolCallId=='call-round-one')
 check('failed tool result stays failed',multiConversation.messages[2].toolCalls and multiConversation.messages[2].toolCalls[1].state=='failed')
@@ -139,7 +149,7 @@ Agent.sendTurn=function(_,spec)
  for _,message in spec.messages do if message.content=='Tool result:\nStructured result' then structuredResult=message.role=='user' end end
  return {text='Done.',reasoning='',toolCalls={},durationMs=1,cancelled=false}
 end
-Agent.runTask({userText='Continue',mode='plan',conversation=internalConversation})
+runAgentTask({userText='Continue',mode='plan',conversation=internalConversation})
 check('structured action results avoid native tool protocol',structuredResult)
 Sessions.recordUsage(internalConversation.id,{inputTokens=10,outputTokens=7,reasoningTokens=3})
 Sessions.recordUsage(internalConversation.id,nil)
@@ -152,7 +162,7 @@ Agent.sendTurn=function(_,spec)
  for _,message in spec.messages do for _,call in (message.toolCalls or {}) do if call.id=='unanswered-call' then unmatchedOmitted=false end end end
  return {text='A new answer.',reasoning='',toolCalls={},durationMs=1,cancelled=false}
 end
-Agent.runTask({userText='Continue after Stop',mode='plan',conversation=internalConversation})
+runAgentTask({userText='Continue after Stop',mode='plan',conversation=internalConversation})
 check('cancelled native call does not break the next request',unmatchedOmitted)
 Agent.sendTurn=originalSend;State.reset()
 Sessions.setConversationMeta(internalConversation.id,{mode='build'})

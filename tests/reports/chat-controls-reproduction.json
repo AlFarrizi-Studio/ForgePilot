@@ -1,0 +1,24 @@
+{
+  "version": "3.5.0",
+  "environment": "Deterministic Luau engine and scheduler simulation; native Studio not exercised",
+  "before_fix": {
+    "failures": [
+      "selected single question option reaches the waiting agent",
+      "answered question auto collapses and keeps a reopen control",
+      "custom single answer is validated once and returns its actual text",
+      "custom multiple answer reaches the waiting agent",
+      "native Shift Enter modifier inserts a paragraph instead of sending",
+      "approval presents Always Approve as the third choice",
+      "Always Approve grants current action and remembers the preference",
+      "provider limit includes a whole-card disclosure control"
+    ],
+    "failed_checks": 8
+  },
+  "after_fix": {
+    "passed": 776,
+    "failed_checks": 0,
+    "warnings": 0,
+    "additional_checks": 47
+  },
+  "test": "tests/luau/chat_controls_regression_tests.luau"
+}

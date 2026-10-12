@@ -72,13 +72,13 @@ local function runChatRegressions()
  check('retry rescheduling keeps only one countdown worker',#scheduled<=queued+1)
  local heartbeatTicks=0
  taskMock.spawn(function() for _=1,10 do taskMock.wait(.1);heartbeatTicks+=1 end end)
- local countdown=card:FindFirstChild('Countdown')
+ local countdown=card:FindFirstChild('Countdown',true)
  local before=countdown.Text;advance(1.25)
  check('retry countdown yields to other work',heartbeatTicks==10 and countdown.Text~=before)
  EventBus.emit('retry:state',{operationId='other-operation',state='RETRY_CANCELLED',reason='Wrong operation'})
  check('retry events are isolated by operation id',card:FindFirstChild('Headline',true).Text=='Provider Rate Limited')
  EventBus.emit('retry:state',{operationId='retry-ui-fixture',state='WAITING_FOR_QUOTA',paused=true,pauseReason='A longer provider wait.'})
- check('paused retry displays its current reason',card:FindFirstChild('Status').Text:find('A longer provider wait.',1,true)~=nil)
+ check('paused retry displays its current reason',card:FindFirstChild('Status',true).Text:find('A longer provider wait.',1,true)~=nil)
  EventBus.emit('retry:state',{operationId='retry-ui-fixture',state='RETRY_SCHEDULED',attempt=2,delaySeconds=2})
  advance(.25)
  check('scheduled retry restarts countdown',countdown.Text:find('Next Attempt:',1,true)~=nil)
@@ -150,9 +150,10 @@ local function runChatRegressions()
  if realCard then
   for name,view in views do view.Visible=name=='ChatView' end
   module('UI/DockWidget').navigate('chat')
+  realCard:FindFirstChild('Toggle',true).MouseButton1Click:Fire()
   for _,width in {300,440,638,760} do
    compute(width,680)
-   check('retry actions fit width '..width,allInside(realCard:FindFirstChild('Actions')))
+   check('retry actions fit width '..width,allInside(realCard:FindFirstChild('Actions',true)))
    local iconsVisible=true
    for _,section in module('UI/DockWidget').SectionOrder do
     local icon=gui:FindFirstChild('Tab_'..section,true):FindFirstChild('Icon')
@@ -162,7 +163,7 @@ local function runChatRegressions()
   end
   compute(638,680);snapshot={name='chat-retry-fixed',width=638,height=680,items={}};export(gui:FindFirstChild('Root'),true,nil);print('CHAT_FIX_SNAPSHOT '..jsonEncode(snapshot))
   EventBus.emit('retry:state',{operationId=State.getTaskId(),state='RETRY_SCHEDULED',attempt=2,delaySeconds=30})
-  check('chat retry card tracks the actual task id',realCard:FindFirstChild('Status').Text=='Retry: 2 / 5')
+  check('chat retry card tracks the actual task id',realCard:FindFirstChild('Status',true).Text=='Retry: 2 / 5')
   realCard:FindFirstChild('CancelRetry',true).MouseButton1Click:Fire();advance(.5)
   check('Cancel Retry ends chat and releases the composer',not State.isBusy() and not streaming.isBusy() and views.ChatView:FindFirstChild('RetryCard',true)==nil and views.ChatView:FindFirstChild('Send',true)~=nil)
  end

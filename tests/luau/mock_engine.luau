@@ -86,7 +86,7 @@ local function isa(class,target)
  if class==target then return true end
  local def=classes[class];return def~=nil and def.super~='<<<ROOT>>>' and isa(def.super,target)
 end
-local methods={};local allInstances={}
+local methods={};local allInstances={};local nextInstanceId=0
 local newInstance
 local instanceMeta={}
 function instanceMeta.__index(self,key)
@@ -144,7 +144,7 @@ function newInstance(class)
  if class=='UISizeConstraint' then instance._props.MinSize=vector(0,0);instance._props.MaxSize=vector(1000000,1000000) end
  if class=='UIPadding' then for _,key in {'PaddingLeft','PaddingRight','PaddingTop','PaddingBottom'} do instance._props[key]=udim() end end
  if class=='UIGridLayout' then local p=instance._props;p.CellSize=udim2(0,100,0,100);p.CellPadding=udim2(0,5,0,5);p.FillDirectionMaxCells=0;p.FillDirection=EnumMock.FillDirection.Horizontal;p.SortOrder=EnumMock.SortOrder.LayoutOrder;p.AbsoluteContentSize=vector(0,0) end
- allInstances[#allInstances+1]=instance;return instance
+ nextInstanceId+=1;instance._mockId=nextInstanceId;allInstances[nextInstanceId]=instance;return instance
 end
 function methods:IsA(target) return isa(self._class,target) end
 function methods:GetChildren() return table.clone(self._children) end
@@ -163,7 +163,7 @@ function methods:GetPropertyChangedSignal(key) assert(member(self._class,key)=='
 function methods:GetAttribute(name) return self._attributes[name] end
 function methods:SetAttribute(name,value) self._attributes[name]=value end
 function methods:GetAttributes() return table.clone(self._attributes) end
-function methods:Destroy() if self._destroyed then return end;self.Destroying:Fire();for _,child in table.clone(self._children) do child:Destroy() end;self.Parent=nil;self._destroyed=true end
+function methods:Destroy() if self._destroyed then return end;self.Destroying:Fire();for _,child in table.clone(self._children) do child:Destroy() end;self.Parent=nil;self._destroyed=true;allInstances[self._mockId]=nil end
 function methods:ClearAllChildren() for _,child in table.clone(self._children) do child:Destroy() end end
 function methods:CaptureFocus() self._focused=true;self.Focused:Fire() end
 function methods:IsFocused() return self._focused==true end
@@ -236,6 +236,9 @@ function methods:UrlEncode(text) return (text:gsub('([^%w%-_%.~])',function(c) r
 function methods:RequestAsync() requestCount+=1;return {Success=false,StatusCode=503,StatusMessage='Mock offline',Headers={},Body='{"error":{"message":"Mock network disabled"}}'} end
 function methods:CreateWebStreamClient() error('Mock engine has no live stream transport') end
 function methods:IsKeyDown() return false end
+function methods:IsModifierKeyDown(modifier)
+ return modifier==EnumMock.ModifierKey.Shift and self._shift==true
+end
 function methods:GetCanUndo() return false,'' end
 function methods:GetCanRedo() return false,'' end
 function methods:IsRecordingInProgress() return false end

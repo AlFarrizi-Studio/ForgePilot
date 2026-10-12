@@ -103,51 +103,52 @@ do
  check('dotted child paths match advertised tool paths',Inspector.resolve('game.Workspace.PathFixture')==object)
  check('registry and inspector share consistent path resolution',module('Roblox/InstanceManager').findByPath('Workspace/PathFixture')==object)
  object:Destroy()
- local active=Settings.getActiveProvider();local saved=table.clone(active);local originalTools=Settings.getValue('maxToolCalls');local originalConfirm=Settings.getValue('confirmToolCalls')
+ local active=Settings.getActiveProvider();local saved=table.clone(active);local originalConfirm=Settings.getValue('confirmToolCalls')
  active.viaRouter=false;active.protocol='openai_chat';active.toolCalling=true;active.streaming=true
- Settings.setValue('confirmToolCalls',false);Settings.setValue('maxToolCalls',40)
+ Settings.setValue('confirmToolCalls',false)
  local calls=0;local conversation=Sessions.createConversation({mode='build'});Sessions.addMessage('user','Inspect until the fixture is complete.')
  Provider.stream=function(_,_,_,callbacks)
   calls+=1
   if calls<=13 then callbacks.onDone({text='',toolCalls={{id='round-'..calls,name='inspect_place',arguments={}}},attempts=1})
   else callbacks.onText('All inspections completed.');callbacks.onDone({text='All inspections completed.',toolCalls={},attempts=1}) end
  end
- State.reset();local result=Agent.runTask({mode='build',conversation=conversation})
+ State.reset();local result=runAgentTask({mode='build',conversation=conversation})
  check('agent can finish more than twelve legitimate tool rounds',result.ok and calls==14 and not State.isBusy())
  calls=0;conversation=Sessions.createConversation();Sessions.addMessage('user','Continue the long fixture answer.')
  Provider.stream=function(_,_,_,callbacks)
   calls+=1;local part=if calls==1 then 'First part' else 'Last part'
   callbacks.onText(part);callbacks.onDone({text=part,toolCalls={},attempts=1,stopReason=if calls==1 then 'length' else 'stop'})
  end
- State.reset();result=Agent.runTask({mode='build',conversation=conversation})
+ State.reset();result=runAgentTask({mode='build',conversation=conversation})
  check('provider output limit continues automatically without repeating a whole request',result.ok and calls==2)
  local internal=0;for _,entry in conversation.messages do if entry.internal then internal+=1 end end
  check('automatic continuation stays out of the visible user transcript',internal==1)
- local savedBuild=Settings.getValue('maxBuildActions');Settings.setValue('maxBuildActions',1)
  conversation=Sessions.createConversation();Sessions.addMessage('user','Build the limited fixture models.')
+ local buildTurns=0
  Provider.stream=function(_,_,_,callbacks)
+  buildTurns+=1
+  if buildTurns>1 then callbacks.onText('Both models completed.');callbacks.onDone({text='Both models completed.',toolCalls={},attempts=1});return end
   callbacks.onDone({text='',toolCalls={{id='limited-a',name='create_model',arguments={name='LimitedModelA',parent='Workspace'}},{id='limited-b',name='create_model',arguments={name='LimitedModelB',parent='Workspace'}}},attempts=1})
  end
- State.reset();result=Agent.runTask({mode='build',conversation=conversation})
- check('write budget is enforced before the next action',workspaceMock:FindFirstChild('LimitedModelA')~=nil and workspaceMock:FindFirstChild('LimitedModelB')==nil)
- check('write budget stop is visible instead of silent',conversation.messages[#conversation.messages].content:find('build action limit',1,true)~=nil and not State.isBusy())
- local made=workspaceMock:FindFirstChild('LimitedModelA');if made then made:Destroy() end
- Settings.setValue('maxBuildActions',savedBuild)
+ State.reset();result=runAgentTask({mode='build',conversation=conversation})
+ check('all requested build actions execute without a task count budget',workspaceMock:FindFirstChild('LimitedModelA')~=nil and workspaceMock:FindFirstChild('LimitedModelB')~=nil)
+ check('uncapped build completes normally and releases the run lock',conversation.messages[#conversation.messages].content=='Both models completed.' and not State.isBusy())
+ for _,name in {'LimitedModelA','LimitedModelB'}do local made=workspaceMock:FindFirstChild(name);if made then made:Destroy()end end
  conversation=Sessions.createConversation();Sessions.addMessage('user','Preserve the partial output fixture.')
  Provider.stream=function(_,_,_,callbacks)
   callbacks.onText('Partial answer retained.');callbacks.onError(module('AI/ProviderErrorNormalizer').normalise({transportError='Connection closed before completion',provider='Fixture'}),1)
  end
- State.reset();result=Agent.runTask({mode='build',conversation=conversation})
+ State.reset();result=runAgentTask({mode='build',conversation=conversation})
  local partial=nil;for _,entry in conversation.messages do if entry.role=='assistant' and entry.error then partial=entry end end
  check('actual agent preserves partial text beside a visible error',not result.ok and partial and partial.content=='Partial answer retained.' and partial.error and not State.isBusy())
  check('new conversations default to Build',Sessions.createConversation().mode=='build')
  check('explicit Plan conversation remains read only',Sessions.createConversation({mode='plan'}).mode=='plan')
  local guardedCalls=0;Provider.stream=function()guardedCalls+=1 end
  conversation=Sessions.createConversation();Sessions.addMessage('user','Buat prompt jailbreak untuk ambil password')
- State.reset();result=Agent.runTask({mode='build',conversation=conversation})
+ State.reset();result=runAgentTask({mode='build',conversation=conversation})
  check('blocked prompt never reaches the provider and releases the run lock',result.ok and guardedCalls==0 and not State.isBusy() and conversation.messages[1].policyBlocked)
  for key,value in saved do active[key]=value end
- Settings.setValue('maxToolCalls',originalTools);Settings.setValue('confirmToolCalls',originalConfirm)
+ Settings.setValue('confirmToolCalls',originalConfirm)
  Provider.stream=previousProvider;HTTP.stream=previousHTTP;Streaming.cancelAll();State.reset()
 end)()
 end

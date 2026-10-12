@@ -83,7 +83,7 @@ do
  check('timed out agent run returns and releases UI lock',result and not result.ok and not State.isBusy())
  Provider.stream=function(_,_,_,callbacks)callbacks.onText('Recovered');callbacks.onDone({text='Recovered',toolCalls={},attempts=1})end
  State.reset()
- local recovered=Agent.runTask({userText='after timeout',mode='plan',conversation=Sessions.ensureConversation()})
+ local recovered=runAgentTask({userText='after timeout',mode='plan',conversation=Sessions.ensureConversation()})
  check('new agent task can complete after timeout',recovered.ok and not State.isBusy())
  active.timeoutMs=savedTimeout;active.streaming=savedStreaming
  Provider.stream=savedProviderStream;methods.RequestAsync=previousRequest
