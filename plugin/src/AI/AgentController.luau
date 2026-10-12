@@ -267,6 +267,7 @@ function AgentController.requestApproval(toolName: string, arguments: { [string]
 	local settings = SettingsManager.get()
 	local tool = ToolValidator.get(toolName)
 	if not tool or settings.toolPermissions[toolName] == false then return false end
+	if settings.alwaysApproveActions then return true end
 	if tool.mode == "plan" and settings.autoApproveReadOnly then return true end
 	if tool.destructive or (tool.confirmation and settings.confirmDestructive) or settings.confirmToolCalls then
 		return AgentController.awaitApproval(toolName, arguments, taskId)
@@ -308,8 +309,9 @@ function AgentController.awaitApproval(toolName: string, arguments: { [string]: 
 end
 
 --- Called by the approval card.
-function AgentController.resolveApproval(granted: boolean)
+function AgentController.resolveApproval(granted: boolean, alwaysApprove: boolean?)
 	if approvalResolver then
+		if granted and alwaysApprove then SettingsManager.setValue("alwaysApproveActions", true) end
 		approvalResolver(granted)
 	end
 end
@@ -624,33 +626,28 @@ local function runTaskImpl(options: {
 	local providerFailed = false
 	local terminalReason: string? = nil
 	local continuations = 0
-	local taskComplete = false
 
-	local function executeLimited(name: string, arguments: any, id: string?): ToolOutcome
+	local function executeAction(name: string, arguments: any, id: string?): ToolOutcome
 		local descriptor = ToolValidator.get(name)
-		if not terminalReason and descriptor and descriptor.mode == "build" and buildActionCount >= settings.maxBuildActions then
-			terminalReason = string.format("The build action limit of %d was reached. Completed steps were kept; increase the limit in Settings > Agent or send a follow-up.", settings.maxBuildActions)
-		end
-		if terminalReason then return { toolName = name, arguments = {}, ok = false, verified = false, message = terminalReason, durationMs = 0 } end
 		local outcome = AgentController.executeTool(name, arguments, options.mode, taskId, id)
 		if outcome.verified and descriptor and descriptor.mode == "build" then buildActionCount += 1 end
 		return outcome
 	end
 
-	local roundLimit = math.clamp(settings.maxToolCalls, 1, 500) + 4
-	local loopBudget = roundLimit
-
-	while loopBudget > 0 do
-		loopBudget -= 1
+	local firstTurn = true
+	while true do
+		-- An uncapped task must yield so Studio can draw and process Stop.
+		task.wait()
 
 		if StateManager.get() == "CANCELLED" then
 			cancelled = true
 			break
 		end
 
-		if loopBudget < roundLimit - 1 then
+		if not firstTurn then
 			message = addMessage("assistant", "", { taskId = taskId, model = profile.modelId, streaming = true })
 		end
+		firstTurn = false
 		-- `toolDefinitions` is the gate for native tool calling: without it `tools`
 -- stayed nil and the whole tool-call branch below was unreachable.
 		local spec = prepareSpec(profile, conversation, options.mode, taskId, ToolValidator.toDefinitions(options.mode))
@@ -723,7 +720,7 @@ local function runTaskImpl(options: {
 		})
 		local finish = string.lower(tostring(turn.stopReason or ""))
 		if finish == "length" or finish == "max_tokens" or finish == "max_output_tokens" then
-			if #turn.toolCalls == 0 and continuations < 3 and loopBudget > 0 then
+			if #turn.toolCalls == 0 and continuations < 3 then
 				continuations += 1
 				StateManager.setActivity("Continuing after the provider output limit")
 				addMessage("user", "Continue the unfinished answer exactly where you stopped, without repeating earlier text. Complete the original task using available tools when needed.", { taskId = taskId, internal = true })
@@ -780,17 +777,11 @@ local function runTaskImpl(options: {
 			end
 
 			if action.action == "done" then
-				taskComplete = true
 				break
 			end
 
 			toolCallCount += 1
-			if toolCallCount > settings.maxToolCalls then
-				terminalReason = string.format("The tool call limit of %d was reached. Completed steps were kept; increase the limit in Settings > Agent or send a follow-up.", settings.maxToolCalls)
-				break
-			end
-
-			local outcome = executeLimited(action.action, action.arguments, Time.newId("act"))
+			local outcome = executeAction(action.action, action.arguments, Time.newId("act"))
 
 			EventBus.emit(EventBus.Events.BuildProgress, {
 				phase = "toolResult",
@@ -822,24 +813,26 @@ local function runTaskImpl(options: {
 			StateManager.transition("ANALYZING", { taskId = taskId, activity = "Deciding what to do" })
 
 			local recordedCalls = {}
+			local requestedCalls = {}
 			for _, call in turn.toolCalls do
-				recordedCalls[#recordedCalls + 1] = { id = call.id, name = call.name, arguments = call.arguments, state = "requested" }
+				local record = { id = call.id, name = call.name, arguments = call.arguments, state = "requested" }
+				recordedCalls[#recordedCalls + 1] = record
+				requestedCalls[#requestedCalls + 1] = table.clone(record)
 			end
-			SessionManager.updateMessage(message.id, { toolCalls = recordedCalls })
+			-- Publish a snapshot. Mutating the transcript's shared records during
+			-- each action otherwise rebuilds the whole batch on every tool result.
+			SessionManager.updateMessage(message.id, { toolCalls = requestedCalls })
 
 			local anyExecuted = false
 			for _, call in turn.toolCalls do
+				task.wait()
 				if StateManager.get() == "CANCELLED" then
 					cancelled = true
 					break
 				end
 
 				toolCallCount += 1
-				if toolCallCount > settings.maxToolCalls then
-					terminalReason = string.format("The tool call limit of %d was reached. Completed steps were kept; increase the limit in Settings > Agent or send a follow-up.", settings.maxToolCalls)
-				end
-
-				local outcome = executeLimited(call.name, call.arguments, call.id)
+				local outcome = executeAction(call.name, call.arguments, call.id)
 				for _, recorded in recordedCalls do
 					if recorded.id == call.id then
 						recorded.state = if outcome.ok then "completed" else "failed"
@@ -871,11 +864,7 @@ local function runTaskImpl(options: {
 		end
 
 		-- 3. Plain answer --------------------------------------------------------
-		taskComplete = true
 		break
-	end
-	if loopBudget == 0 and not taskComplete and not cancelled and not providerFailed and not terminalReason then
-		terminalReason = "The agent reached its turn limit. Completed steps and the partial answer were kept; send a follow-up to continue."
 	end
 	if terminalReason then
 		addMessage("assistant", terminalReason, { taskId = taskId })

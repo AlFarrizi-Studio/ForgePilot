@@ -170,10 +170,10 @@ end
 --=============================================================================
 
 --- Called by the question card when the user submits.
-function QuestionManager.submit(value: any)
+function QuestionManager.submit(value: any, questionId: string?): boolean
 	local question = pending
-	if not question then
-		return
+	if not question or question.answered or (questionId and questionId ~= question.id) then
+		return false
 	end
 
 	local cleaned = QuestionManager.validate(question, value)
@@ -182,7 +182,7 @@ function QuestionManager.submit(value: any)
 			kind = "error",
 			message = "That answer is not valid for this question.",
 		})
-		return
+		return false
 	end
 
 	question.answered = true
@@ -203,13 +203,14 @@ function QuestionManager.submit(value: any)
 	if callback then
 		callback(cleaned)
 	end
+	return true
 end
 
 --- Called when the user cancels the question.
-function QuestionManager.cancel(reason: string?)
+function QuestionManager.cancel(reason: string?, questionId: string?): boolean
 	local question = pending
-	if not question then
-		return
+	if not question or question.answered or (questionId and questionId ~= question.id) then
+		return false
 	end
 	question.answered = true
 	question.answer = nil
@@ -227,12 +228,13 @@ function QuestionManager.cancel(reason: string?)
 	if callback then
 		callback(reason or "The user cancelled the question.")
 	end
+	return true
 end
 
 --- "Let AI Decide" — asks the model to choose using its own judgement.
-function QuestionManager.letAiDecide(): boolean
+function QuestionManager.letAiDecide(questionId: string?): boolean
 	local question = pending
-	if not question then
+	if not question or question.answered or (questionId and questionId ~= question.id) then
 		return false
 	end
 	if not question.allowAiDecide then
@@ -270,6 +272,12 @@ end
 
 --- Returns a cleaned answer, or nil when the value does not satisfy the question.
 function QuestionManager.validate(question: Question, value: any): any
+	if type(value) == "table" and value.__custom == true then
+		if not question.allowCustom or type(value.text) ~= "string" then return nil end
+		local text = StringUtil.trim(value.text)
+		if text == "" then return nil end
+		return if question.kind == "multiple" then { text } else text
+	end
 	if question.kind == "text" then
 		if type(value) ~= "string" then
 			return nil
@@ -299,9 +307,6 @@ function QuestionManager.validate(question: Question, value: any): any
 	if question.kind == "single" then
 		if type(value) ~= "string" then
 			return nil
-		end
-		if value == "__custom__" then
-			return { __custom = true }
 		end
 		for _, option in (question.options or {}) do
 			if option.id == value then

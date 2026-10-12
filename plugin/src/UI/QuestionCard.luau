@@ -12,6 +12,8 @@ local QuestionManager = require(script.Parent.Parent.AI.QuestionManager)
 local StringUtil = require(script.Parent.Parent.Utilities.StringUtil)
 
 local Theme = require(script.Parent.Parent.Utilities.Theme)
+local Disclosure = require(script.Parent.Disclosure)
+local Components = require(script.Parent.Components)
 
 local QuestionCard = {}
 
@@ -34,9 +36,9 @@ local liveListeners: { [Frame]: any } = setmetatable({}, { __mode = "k" })
 
 local function releaseListener(card: Frame)
 	local listener = liveListeners[card]
-	if listener then
-		listener:Disconnect()
-		liveListeners[card] = nil
+	if listener and listener.connection then
+		listener.connection:Disconnect()
+		listener.connection = nil
 	end
 end
 
@@ -59,7 +61,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 	Theme.padding(12).Parent = card
 
 	local content = Instance.new("Frame")
-	content.Name = "Content"
+	content.Name = "QuestionBody"
 	content.Size = UDim2.new(1, 0, 0, 0)
 	content.AutomaticSize = Enum.AutomaticSize.Y
 	content.BackgroundTransparency = 1
@@ -76,6 +78,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 	local icon = Icons.glyph("Lightbulb", 13, accent)
 	icon.Name = "Icon"
 	icon.Size = UDim2.fromOffset(15, 15)
+	icon.Position = UDim2.fromOffset(0, 6)
 	icon.Parent = headerRow
 
 	local kindLabel = Theme.label("Question · " .. tostring(question.kind):upper(), {
@@ -85,7 +88,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 	})
 	kindLabel.Name = "Kind"
 	kindLabel.Position = UDim2.fromOffset(20, 0)
-	kindLabel.Size = UDim2.new(1, -20, 1, 0)
+	kindLabel.Size = UDim2.new(1, -54, 1, 0)
 	kindLabel.Parent = headerRow
 
 	local promptLabel = Theme.label(question.prompt, {
@@ -97,6 +100,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 	promptLabel.Name = "Prompt"
 	promptLabel.Size = UDim2.new(1, 0, 0, 0)
 	promptLabel.AutomaticSize = Enum.AutomaticSize.Y
+	promptLabel.LayoutOrder = 1
 	promptLabel.Parent = content
 
 	local detailLabel: TextLabel? = nil
@@ -110,6 +114,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		detailLabel.Name = "Detail"
 		detailLabel.Size = UDim2.new(1, 0, 0, 0)
 		detailLabel.AutomaticSize = Enum.AutomaticSize.Y
+		detailLabel.LayoutOrder = 2
 		detailLabel.Parent = content
 	end
 
@@ -120,6 +125,10 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 	local numberInput: TextBox? = nil
 	local textInput: TextBox? = nil
 	local submitted = false
+	local function clearHint()
+		local hint = content:FindFirstChild("ValidationHint")
+		if hint then hint:Destroy() end
+	end
 
 	local function lock()
 		if submitted then
@@ -130,6 +139,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		for _, child in content:GetDescendants() do
 			if child:IsA("TextButton") then
 				child.Active = false
+				child.Interactable = false
 				child.AutoButtonColor = false
 				child.BackgroundTransparency = 1
 			elseif child:IsA("TextBox") then
@@ -166,7 +176,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		button.MouseLeave:Connect(function()
 			Theme.tween(button, { BackgroundColor3 = base }, Theme.Motion.Fast):Play()
 		end)
-		button.MouseButton1Click:Connect(callback)
+		button.MouseButton1Click:Connect(function() if not submitted then callback() end end)
 		return button
 	end
 
@@ -177,6 +187,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		list.Size = UDim2.new(1, 0, 0, 0)
 		list.AutomaticSize = Enum.AutomaticSize.Y
 		list.BackgroundTransparency = 1
+		list.LayoutOrder = 3
 		list.Parent = content
 		Theme.listLayout(5).Parent = list
 
@@ -233,8 +244,10 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 			optionButtons[option.id] = optionButton
 
 			optionButton.MouseButton1Click:Connect(function()
+				if submitted then return end
+				clearHint()
 				if question.kind == "single" then
-					selected = {}
+					selected = { [option.id] = true }
 					for id, other in optionButtons do
 						local otherMarker = other:FindFirstChild("Marker") :: TextLabel?
 						if otherMarker then
@@ -282,6 +295,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		box.Size = UDim2.new(1, 0, 0, if numeric then Theme.Metrics.InputHeight else 64)
 		box.AutomaticSize = if numeric then Enum.AutomaticSize.None else Enum.AutomaticSize.None
 		box.TextYAlignment = if numeric then Enum.TextYAlignment.Center else Enum.TextYAlignment.Top
+		box.LayoutOrder = 4
 		box.Parent = content
 		return box
 	end
@@ -295,6 +309,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		row.Name = "YesNo"
 		row.Size = UDim2.new(1, 0, 0, 30)
 		row.BackgroundTransparency = 1
+		row.LayoutOrder = 4
 		row.Parent = content
 		local rowLayout = Instance.new("UIListLayout")
 		rowLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -304,15 +319,13 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 
 		local yesButton = pill("Yes", true, 1, function()
 			selected = { yes = true }
-			lock()
-			QuestionManager.submit(true)
+			if QuestionManager.submit(true, question.id) then lock() end
 		end)
 		yesButton.Parent = row
 
 		local noButton = pill("No", false, 2, function()
 			selected = { yes = false }
-			lock()
-			QuestionManager.submit(false)
+			if QuestionManager.submit(false, question.id) then lock() end
 		end)
 		noButton.Parent = row
 	end
@@ -321,6 +334,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 	if question.allowCustom and question.kind ~= "text" and question.kind ~= "number" then
 		local toggle = Instance.new("TextButton")
 		toggle.Name = "CustomToggle"
+		toggle.LayoutOrder = 5
 		toggle.Size = UDim2.new(1, 0, 0, 24)
 		toggle.BackgroundTransparency = 1
 		Icons.setButton(toggle, "Edit", "Custom answer")
@@ -331,6 +345,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		toggle.Parent = content
 
 		toggle.MouseButton1Click:Connect(function()
+			if submitted then return end
 			if customInput then
 				customInput:Destroy()
 				customInput = nil
@@ -340,7 +355,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 			local box = Theme.input("Type your own answer", { multiLine = true })
 			box.Name = "CustomInput"
 			box.Size = UDim2.new(1, 0, 0, 56)
-			box.LayoutOrder = 99
+			box.LayoutOrder = 6
 			box.Parent = content
 			customInput = box
 			Icons.setButton(toggle, "Close", "Cancel custom answer")
@@ -349,33 +364,31 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 	end
 
 	-- Action row ----------------------------------------------------------
-	local actions = Instance.new("Frame")
+	local actions, addAction = Components.buttonRow({ columns = 3, minColumnWidth = 128, padding = 6 })
 	actions.Name = "Actions"
-	actions.Size = UDim2.new(1, 0, 0, 28)
-	actions.BackgroundTransparency = 1
+	actions.LayoutOrder = 7
 	actions.Parent = content
-
-	local actionLayout = Instance.new("UIListLayout")
-	actionLayout.FillDirection = Enum.FillDirection.Horizontal
-	actionLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	actionLayout.Padding = UDim.new(0, 6)
-	actionLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	actionLayout.Parent = actions
+	local function actionButton(text: string, primary: boolean, order: number, callback: () -> ()): TextButton
+		local button = addAction(text, { accent = primary, order = order, height = 28 })
+		button.MouseButton1Click:Connect(function() if not submitted then callback() end end)
+		return button
+	end
 
 	local function submitCurrent()
+		if submitted then return end
 		local value: any = nil
 
 		if customInput and #StringUtil.trim(customInput.Text) > 0 then
-			value = "__custom__"
+			value = { __custom = true, text = customInput.Text }
 		elseif question.kind == "text" then
 			value = textInput and textInput.Text or ""
 		elseif question.kind == "number" then
 			value = numberInput and tonumber(numberInput.Text) or ""
 		elseif question.kind == "multiple" then
 			local chosen = {}
-			for id, isSelected in selected do
-				if isSelected then
-					chosen[#chosen + 1] = id
+			for _, option in (question.options or {}) do
+				if selected[option.id] then
+					chosen[#chosen + 1] = option.id
 				end
 			end
 			value = chosen
@@ -386,22 +399,20 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 			end
 		end
 
-		-- Custom free text replaces the sentinel the validator expects.
-		if value == "__custom__" and customInput then
-			value = "__custom__"
-		end
-
 		local cleaned = QuestionManager.validate(question, value)
 		if cleaned == nil then
+			clearHint()
 			local hint = Instance.new("TextLabel")
 			hint.Name = "ValidationHint"
-			hint.Size = UDim2.new(1, 0, 0, 18)
+			hint.Size = UDim2.new(1, 0, 0, 0)
+			hint.AutomaticSize = Enum.AutomaticSize.Y
+			hint.TextWrapped = true
 			hint.BackgroundTransparency = 1
 			hint.TextColor3 = Theme.Colors.Error
 			hint.TextSize = Theme.TextSizes.Caption
 			hint.Text = question.required and "Choose or enter an answer first." or "That value is not valid."
-			hint.Parent = actions
-			hint.LayoutOrder = 90
+			hint.Parent = content
+			hint.LayoutOrder = 8
 			task.delay(3, function()
 				if hint.Parent then
 					hint:Destroy()
@@ -410,36 +421,28 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 			return
 		end
 
-		-- Free-form custom text is carried through explicitly.
-		if question.kind == "single" and value == "__custom__" and customInput then
-			cleaned = StringUtil.trim(customInput.Text)
-		elseif question.kind == "multiple" and customInput and #StringUtil.trim(customInput.Text) > 0 then
-			cleaned = { StringUtil.trim(customInput.Text) }
-		end
-
-		lock()
-		QuestionManager.submit(cleaned)
+		-- The manager accepts the original IDs/custom payload and cleans it once.
+		clearHint()
+		if QuestionManager.submit(value, question.id) then lock() end
 	end
 
 	local order = 0
 	order += 1
-	local submitButton = pill("Submit answer", true, order, submitCurrent)
+	local submitButton = actionButton("Submit answer", true, order, submitCurrent)
 	submitButton.Parent = actions
 
 	if question.kind ~= "boolean" and question.kind ~= "confirm" then
 		order += 1
-		local cancelButton = pill("Cancel", false, order, function()
-			lock()
-			QuestionManager.cancel("The user cancelled the question.")
+		local cancelButton = actionButton("Cancel", false, order, function()
+			if QuestionManager.cancel("The user cancelled the question.", question.id) then lock() end
 		end)
 		cancelButton.Parent = actions
 	end
 
 	if question.allowAiDecide then
 		order += 1
-		local decideButton = pill("Let AI decide", false, order, function()
-			lock()
-			QuestionManager.letAiDecide()
+		local decideButton = actionButton("Let AI decide", false, order, function()
+			if QuestionManager.letAiDecide(question.id) then lock() end
 		end)
 		decideButton.Parent = actions
 	end
@@ -460,41 +463,45 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		end)
 	end
 
-	liveListeners[card] = listener
+	local _, disclosure = Disclosure.build(card, {
+		name = "QuestionDisclosure", header = headerRow, body = content,
+		text = question.prompt, expanded = false, preview = true, maxHeight = 260,
+	})
+	local answered = false
+	liveListeners[card] = {
+		connection = listener,
+		onAnswered = function(answer: any)
+			if answered then return end
+			answered = true
+			releaseListener(card)
+			lock()
+			promptLabel.Text = question.prompt .. "\n\nAnswer: " .. QuestionManager.formatAnswer(answer)
+			kindLabel.Text = "Question · Answered"
+			kindLabel.TextColor3 = Theme.Colors.Success
+			actions.Visible = false
+			for _, name in { "Options", "CustomToggle", "CustomInput", "Input", "YesNo" } do
+				local child = content:FindFirstChild(name)
+				if child and child:IsA("GuiObject") then child.Visible = false end
+			end
+			disclosure.setText("Answer: " .. QuestionManager.formatAnswer(answer))
+			disclosure.setExpanded(false)
+		end,
+	}
+	card.Destroying:Connect(function() releaseListener(card); liveListeners[card] = nil end)
 
 	return card, {
 		cleanup = function()
 			releaseListener(card)
 		end,
+		setExpanded = disclosure.setExpanded,
+		isExpanded = disclosure.isExpanded,
 	}
 end
 
 --- Renders the answered state into an existing card.
 function QuestionCard.markAnswered(card: Frame, answer: any)
-	-- The card is no longer editable, so drop its input listener first.
-	releaseListener(card)
-
-	local promptLabel = card:FindFirstChild("Content") and (card.Content:FindFirstChild("Prompt") :: TextLabel?)
-	if not promptLabel then
-		return
-	end
-	promptLabel.Text ..= string.format("\n\nAnswer: %s", QuestionManager.formatAnswer(answer))
-
-	local actions = card.Content:FindFirstChild("Actions")
-	if actions then
-		for _, child in actions:GetChildren() do
-			if child:IsA("Frame") then
-				child:Destroy()
-			end
-		end
-	end
-
-	local options = card.Content:FindFirstChild("Options")
-	if options then
-		options.Visible = false
-	end
-
-	card.BackgroundTransparency = 0.4
+	local controller = liveListeners[card]
+	if controller then controller.onAnswered(answer) end
 end
 
 return QuestionCard

@@ -140,18 +140,37 @@ function ChatInput.build(options: any): (Frame, any)
 		resize()
 		refresh()
 	end
-	local function isShift(): boolean
+	local function isShift(key: InputObject?): boolean
+		-- Studio's docked text editor can omit Shift InputBegan/IsKeyDown.
+		-- The Return event itself carries the modifier state, including FocusLost.
+		if key then
+			local ok, shifted = pcall(function() return key:IsModifierKeyDown(Enum.ModifierKey.Shift) end)
+			if ok then return shifted end
+		end
 		return leftShiftDown or rightShiftDown or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
 	end
 	local keyboardConnections: { RBXScriptConnection } = {}
 	local boundGui: Instance? = nil
 	local enterPending = false
-	local function enter(newLine: boolean)
+	local handledReturn: { [InputObject]: boolean } = setmetatable({}, { __mode = "k" })
+	local lastCursor, lastSelection = -1, -1
+	local function rememberCaret()
+		if box:IsFocused() and box.CursorPosition > 0 then
+			lastCursor, lastSelection = box.CursorPosition, box.SelectionStart
+		end
+	end
+	box:GetPropertyChangedSignal("CursorPosition"):Connect(rememberCaret)
+	box:GetPropertyChangedSignal("SelectionStart"):Connect(rememberCaret)
+	local function enter(newLine: boolean, key: InputObject?)
 		if destroyed or enterPending then return end
+		if key and handledReturn[key] then return end
+		if key then handledReturn[key] = true end
 		enterPending = true
 		local text = box.Text
-		local cursor = if box.CursorPosition > 0 then math.clamp(box.CursorPosition, 1, #text + 1) else #text + 1
-		local selection = box.SelectionStart
+		-- FocusLost can reset native cursor/selection to -1 before it fires.
+		local position = if box.CursorPosition > 0 then box.CursorPosition else lastCursor
+		local cursor = if position > 0 then math.clamp(position, 1, #text + 1) else #text + 1
+		local selection = if box.CursorPosition > 0 then box.SelectionStart else lastSelection
 		local first, last = cursor, cursor
 		if selection and selection > 0 then
 			selection = math.clamp(selection, 1, #text + 1)
@@ -178,7 +197,7 @@ function ChatInput.build(options: any): (Frame, any)
 		if key.KeyCode == Enum.KeyCode.LeftShift then leftShiftDown = true end
 		if key.KeyCode == Enum.KeyCode.RightShift then rightShiftDown = true end
 		if (key.KeyCode == Enum.KeyCode.Return or key.KeyCode == Enum.KeyCode.KeypadEnter) and box:IsFocused() then
-			enter(isShift())
+			enter(isShift(key), key)
 		end
 	end
 	local function inputEnded(key: InputObject)
@@ -204,12 +223,16 @@ function ChatInput.build(options: any): (Frame, any)
 	end
 	frame.AncestryChanged:Connect(bindKeyboard)
 
-	box.FocusLost:Connect(function(enterPressed)
-		if enterPressed and not enterPending then enter(isShift()) end
+	box.FocusLost:Connect(function(enterPressed, inputThatCausedFocusLoss)
+		if enterPressed and not enterPending then enter(isShift(inputThatCausedFocusLoss), inputThatCausedFocusLoss) end
 		if not enterPending then leftShiftDown, rightShiftDown = false, false end
 		refresh()
 	end)
-	box.Focused:Connect(refresh)
+	box.Focused:Connect(function()
+		lastCursor = if box.CursorPosition > 0 then box.CursorPosition else #box.Text + 1
+		lastSelection = box.SelectionStart
+		refresh()
+	end)
 	box:GetPropertyChangedSignal("Text"):Connect(function() resize(); refresh() end)
 	box:GetPropertyChangedSignal("AbsoluteSize"):Connect(resize)
 	action.MouseButton1Click:Connect(function()

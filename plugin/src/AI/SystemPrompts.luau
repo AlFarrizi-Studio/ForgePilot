@@ -188,13 +188,10 @@ AGENT SETTINGS (respect these):
 - Default mode: %s
 - Auto-ask when a decision matters: %s
 - Let the AI decide on its own when allowed: %s
-- Maximum tool calls per task: %d
-- Maximum build actions per task: %d]],
+- Continue tool calls and build actions until the task is complete, the user stops it, or an error prevents progress.]],
 		settings.defaultMode,
 		tostring(settings.autoAsk),
-		tostring(settings.letAiDecide),
-		settings.maxToolCalls,
-		settings.maxBuildActions
+		tostring(settings.letAiDecide)
 	)
 
 	return table.concat(sections, "\n")

@@ -195,9 +195,13 @@ function Components.buttonRow(options: {
 	padding: number?,
 	align: Enum.HorizontalAlignment?,
 	columns: number?,
+	minColumnWidth: number?,
 }?): (Frame, any)
 	local o = options or {}
 	local columns = o.columns
+	local activeColumns = columns or 1
+	local grid: UIGridLayout? = nil
+	local count = 0
 	local padding = o.padding or Theme.Space.SM
 	local height = Theme.Metrics.ButtonHeight
 	local row = Instance.new("Frame")
@@ -210,7 +214,7 @@ function Components.buttonRow(options: {
 	row.LayoutOrder = o.order or 0
 
 	if columns and columns > 1 then
-		local grid = Instance.new("UIGridLayout")
+		grid = Instance.new("UIGridLayout")
 		grid.SortOrder = Enum.SortOrder.LayoutOrder
 		grid.CellSize = UDim2.new(1 / columns, -padding * (columns - 1) / columns, 0, height)
 		grid.CellPadding = UDim2.fromOffset(padding, padding)
@@ -230,7 +234,17 @@ function Components.buttonRow(options: {
 		layout.Parent = row
 	end
 
-	local count = 0
+	local function reflow()
+		if not grid then return end
+		if o.minColumnWidth then
+			activeColumns = math.clamp(math.floor((row.AbsoluteSize.X + padding) / (o.minColumnWidth + padding)), 1, columns or 1)
+		end
+		grid.CellSize = UDim2.new(1 / activeColumns, -padding * (activeColumns - 1) / activeColumns, 0, height)
+		grid.FillDirectionMaxCells = activeColumns
+		local rows = math.max(1, math.ceil(count / activeColumns))
+		row.Size = UDim2.new(1, 0, 0, rows * height + (rows - 1) * padding)
+	end
+	if o.minColumnWidth then row:GetPropertyChangedSignal("AbsoluteSize"):Connect(reflow) end
 	return row, function(text: string, buttonOptions: { accent: boolean?, order: number?, height: number? }?)
 		local bo = buttonOptions or {}
 		local buttonHeight = bo.height or height
@@ -241,8 +255,7 @@ function Components.buttonRow(options: {
 		})
 		if columns and columns > 1 then
 			count += 1
-			local rows = math.ceil(count / columns)
-			row.Size = UDim2.new(1, 0, 0, rows * height + (rows - 1) * padding)
+			reflow()
 			-- Fill the grid cell it lands in; the grid decides the wrap.
 			button.Size = UDim2.new(1, 0, 0, buttonHeight)
 			Theme.minSize(button, Vector2.new(0, buttonHeight))

@@ -180,7 +180,7 @@ function SettingsView.build(parent: GuiObject): (Frame, any)
 			function(value)
 				SettingsManager.setValue("confirmDestructive", value)
 			end,
-			{ hint = "Always ask before deletions, script replacement and terrain fills." }
+			{ hint = "Ask before deletions, script replacement and terrain fills when Always Approve is off." }
 		)
 		destructiveRow.Parent = body
 
@@ -235,36 +235,15 @@ function SettingsView.build(parent: GuiObject): (Frame, any)
 		)
 		readOnlyRow.Parent = body1
 
-		local card2, body2 = Components.section("Limits", { order = 2 })
-		card2.Parent = scroll
-
-		local maxToolsRow, maxToolsHolder = Components.field("Maximum tool calls per task", {
-			hint = "The agent stops and reports when the limit is reached.",
-		})
-		maxToolsRow.Parent = body2
-		local maxToolsBox = Theme.input(tostring(SettingsManager.getValue("maxToolCalls")))
-		maxToolsBox.Size = UDim2.fromOffset(100, Theme.Metrics.InputHeight)
-		maxToolsBox.Parent = maxToolsHolder
-		maxToolsBox.FocusLost:Connect(function(enterPressed)
-			local parsed = tonumber(maxToolsBox.Text)
-			if parsed and enterPressed then
-				SettingsManager.setValue("maxToolCalls", math.clamp(math.floor(parsed), 1, 500))
-				maxToolsBox.Text = tostring(SettingsManager.getValue("maxToolCalls"))
-			end
+		local alwaysRow, _, setAlways = Components.toggle("Always Approve", SettingsManager.getValue("alwaysApproveActions") == true, function(value)
+			SettingsManager.setValue("alwaysApproveActions", value)
+		end, { hint = "Automatically approve enabled tools. Turn this off to restore approval questions." })
+		alwaysRow.Name = "AlwaysApproveActions"
+		alwaysRow.Parent = body1
+		local unsubscribeAlways = EventBus.on(EventBus.Events.ProvidersChanged, function()
+			setAlways(SettingsManager.getValue("alwaysApproveActions") == true)
 		end)
-
-		local maxActionsRow, maxActionsHolder = Components.field("Maximum build actions per task")
-		maxActionsRow.Parent = body2
-		local maxActionsBox = Theme.input(tostring(SettingsManager.getValue("maxBuildActions")))
-		maxActionsBox.Size = UDim2.fromOffset(100, Theme.Metrics.InputHeight)
-		maxActionsBox.Parent = maxActionsHolder
-		maxActionsBox.FocusLost:Connect(function(enterPressed)
-			local parsed = tonumber(maxActionsBox.Text)
-			if parsed and enterPressed then
-				SettingsManager.setValue("maxBuildActions", math.clamp(math.floor(parsed), 1, 5000))
-				maxActionsBox.Text = tostring(SettingsManager.getValue("maxBuildActions"))
-			end
-		end)
+		alwaysRow.Destroying:Connect(unsubscribeAlways)
 
 		local card3, body3 = Components.section("Tool permissions", {
 			subtitle = "Disable a tool to block it entirely. Write tools are additionally gated by mode.",

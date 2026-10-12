@@ -16,6 +16,7 @@ local RetryDelayCalculator = require(script.Parent.Parent.AI.RetryDelayCalculato
 local SmartAutoRetryManager = require(script.Parent.Parent.AI.SmartAutoRetryManager)
 local Theme = require(script.Parent.Parent.Utilities.Theme)
 local Time = require(script.Parent.Parent.Utilities.Time)
+local Disclosure = require(script.Parent.Disclosure)
 
 local RetryStatusUI = {}
 
@@ -87,6 +88,12 @@ function RetryStatusUI.build(options: {
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Padding = UDim.new(0, 6)
 	layout.Parent = card
+	local body = Instance.new("Frame")
+	body.Name = "RetryBody"
+	body.Size = UDim2.new(1, 0, 0, 0)
+	body.AutomaticSize = Enum.AutomaticSize.Y
+	Theme.passThrough(body)
+	Theme.listLayout(6).Parent = body
 
 	-- Header ------------------------------------------------------------
 	local header = Instance.new("Frame")
@@ -99,7 +106,7 @@ function RetryStatusUI.build(options: {
 	local icon = Icons.glyph("Warning", 14, colour)
 	icon.Name = "Icon"
 	icon.Size = UDim2.fromOffset(17, 17)
-	icon.Position = UDim2.fromOffset(0, 1)
+	icon.Position = UDim2.fromOffset(0, 6)
 	icon.Parent = header
 
 	local headline = Theme.label(
@@ -108,7 +115,7 @@ function RetryStatusUI.build(options: {
 	)
 	headline.Name = "Headline"
 	headline.Position = UDim2.fromOffset(22, 0)
-	headline.Size = UDim2.new(1, -22, 1, 0)
+	headline.Size = UDim2.new(1, -54, 1, 0)
 	headline.TextTruncate = Enum.TextTruncate.AtEnd
 	headline.Parent = header
 
@@ -123,7 +130,7 @@ function RetryStatusUI.build(options: {
 	facts.Size = UDim2.new(1, 0, 0, 0)
 	facts.AutomaticSize = Enum.AutomaticSize.Y
 	facts.LayoutOrder = 2
-	facts.Parent = card
+	facts.Parent = body
 
 	local countdownLabel = Theme.label("", {
 		size = Theme.TextSizes.Body,
@@ -134,7 +141,7 @@ function RetryStatusUI.build(options: {
 	countdownLabel.Size = UDim2.new(1, 0, 0, 0)
 	countdownLabel.AutomaticSize = Enum.AutomaticSize.Y
 	countdownLabel.LayoutOrder = 3
-	countdownLabel.Parent = card
+	countdownLabel.Parent = body
 
 	local statusLabel = Theme.label("", {
 		size = Theme.TextSizes.Caption,
@@ -146,7 +153,7 @@ function RetryStatusUI.build(options: {
 	statusLabel.Size = UDim2.new(1, 0, 0, 0)
 	statusLabel.AutomaticSize = Enum.AutomaticSize.Y
 	statusLabel.LayoutOrder = 4
-	statusLabel.Parent = card
+	statusLabel.Parent = body
 
 	-- Progress bar --------------------------------------------------------
 	local track = Instance.new("Frame")
@@ -156,7 +163,7 @@ function RetryStatusUI.build(options: {
 	track.BackgroundColor3 = Theme.Extra.SurfaceRaised
 	track.BorderSizePixel = 0
 	track.ClipsDescendants = true
-	track.Parent = card
+	track.Parent = body
 	Theme.corner(3).Parent = track
 
 	local fill = Instance.new("Frame")
@@ -178,7 +185,7 @@ function RetryStatusUI.build(options: {
 	details.AutomaticSize = Enum.AutomaticSize.Y
 	details.Visible = false
 	details.LayoutOrder = 6
-	details.Parent = card
+	details.Parent = body
 
 	-- Actions ------------------------------------------------------------
 	local actions = Instance.new("Frame")
@@ -186,7 +193,7 @@ function RetryStatusUI.build(options: {
 	actions.Size = UDim2.new(1, 0, 0, 28)
 	actions.BackgroundTransparency = 1
 	actions.LayoutOrder = 7
-	actions.Parent = card
+	actions.Parent = body
 	local actionLayout = Instance.new("UIListLayout")
 	actionLayout.FillDirection = Enum.FillDirection.Horizontal
 	actionLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -210,6 +217,15 @@ function RetryStatusUI.build(options: {
 		button.TextSize = 11
 		button.TextTruncate = Enum.TextTruncate.AtEnd
 	end
+	local _, disclosure = Disclosure.build(card, {
+		name = "ProviderDisclosure", header = header, body = body,
+		expanded = false, preview = true, maxHeight = 260,
+	})
+	local function syncPreview()
+		disclosure.setText(countdownLabel.Text .. (if countdownLabel.Text ~= "" then " · " else "") .. statusLabel.Text)
+	end
+	countdownLabel:GetPropertyChangedSignal("Text"):Connect(syncPreview)
+	statusLabel:GetPropertyChangedSignal("Text"):Connect(syncPreview)
 
 	--=============================================================================
 	-- STATE
@@ -438,9 +454,14 @@ function RetryStatusUI.build(options: {
 			headline.TextColor3 = Theme.Colors.Success
 			countdownLabel.Text = "Continuing task."
 			statusLabel.TextColor3 = Theme.Colors.Success
+			retryNowButton.Interactable = false
+			cancelButton.Interactable = false
+			disclosure.setExpanded(false)
 			Theme.tween(card, { BackgroundTransparency = 0.4 }, Theme.Motion.Slow):Play()
 		elseif payload.state == "RETRIES_EXHAUSTED" then
 			state.finished = true
+			retryNowButton.Interactable = false
+			cancelButton.Interactable = false
 			stopHeartbeat()
 			headline.Text = "Retries Exhausted"
 			headline.TextColor3 = Theme.Colors.Error
@@ -451,6 +472,8 @@ function RetryStatusUI.build(options: {
 			end
 		elseif payload.state == "RETRY_CANCELLED" then
 			state.finished = true
+			retryNowButton.Interactable = false
+			cancelButton.Interactable = false
 			stopHeartbeat()
 			headline.Text = "Retry Cancelled"
 			countdownLabel.Text = payload.reason or "Cancelled."
@@ -474,6 +497,8 @@ function RetryStatusUI.build(options: {
 	end
 
 	return card, {
+		setExpanded = disclosure.setExpanded,
+		isExpanded = disclosure.isExpanded,
 		destroy = function()
 			destroyed = true
 			stopHeartbeat()

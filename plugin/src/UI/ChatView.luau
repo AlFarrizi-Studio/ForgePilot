@@ -467,18 +467,19 @@ function ChatView.build(parent: GuiObject, hooks: any): (Frame, any)
 		approvalCard = card
 		card.LayoutOrder = 9100
 		card.Parent = cards
-		local row, add = Components.buttonRow({ columns = 2 })
+		local row, add = Components.buttonRow({ columns = 3, minColumnWidth = 128 })
 		row.Parent = body
 		local answered = false
-		local function answer(value: boolean)
+		local function answer(value: boolean, always: boolean?)
 			if answered then return end
 			answered = true
-			AgentController.resolveApproval(value)
+			AgentController.resolveApproval(value, always)
 			card:Destroy()
 			approvalCard = nil
 		end
 		add("Approve", { accent = true, order = 1 }).MouseButton1Click:Connect(function() answer(true) end)
 		add("Decline", { order = 2 }).MouseButton1Click:Connect(function() answer(false) end)
+		add("Always Approve", { order = 3 }).MouseButton1Click:Connect(function() answer(true, true) end)
 		follow = true
 		task.defer(scrollBottom)
 	end)

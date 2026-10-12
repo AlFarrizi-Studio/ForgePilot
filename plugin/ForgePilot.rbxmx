@@ -3748,6 +3748,7 @@ function AgentController.requestApproval(toolName: string, arguments: { [string]
 	local settings = SettingsManager.get()
 	local tool = ToolValidator.get(toolName)
 	if not tool or settings.toolPermissions[toolName] == false then return false end
+	if settings.alwaysApproveActions then return true end
 	if tool.mode == "plan" and settings.autoApproveReadOnly then return true end
 	if tool.destructive or (tool.confirmation and settings.confirmDestructive) or settings.confirmToolCalls then
 		return AgentController.awaitApproval(toolName, arguments, taskId)
@@ -3789,8 +3790,9 @@ function AgentController.awaitApproval(toolName: string, arguments: { [string]: 
 end
 
 --- Called by the approval card.
-function AgentController.resolveApproval(granted: boolean)
+function AgentController.resolveApproval(granted: boolean, alwaysApprove: boolean?)
 	if approvalResolver then
+		if granted and alwaysApprove then SettingsManager.setValue("alwaysApproveActions", true) end
 		approvalResolver(granted)
 	end
 end
@@ -4105,33 +4107,28 @@ local function runTaskImpl(options: {
 	local providerFailed = false
 	local terminalReason: string? = nil
 	local continuations = 0
-	local taskComplete = false
 
-	local function executeLimited(name: string, arguments: any, id: string?): ToolOutcome
+	local function executeAction(name: string, arguments: any, id: string?): ToolOutcome
 		local descriptor = ToolValidator.get(name)
-		if not terminalReason and descriptor and descriptor.mode == "build" and buildActionCount >= settings.maxBuildActions then
-			terminalReason = string.format("The build action limit of %d was reached. Completed steps were kept; increase the limit in Settings > Agent or send a follow-up.", settings.maxBuildActions)
-		end
-		if terminalReason then return { toolName = name, arguments = {}, ok = false, verified = false, message = terminalReason, durationMs = 0 } end
 		local outcome = AgentController.executeTool(name, arguments, options.mode, taskId, id)
 		if outcome.verified and descriptor and descriptor.mode == "build" then buildActionCount += 1 end
 		return outcome
 	end
 
-	local roundLimit = math.clamp(settings.maxToolCalls, 1, 500) + 4
-	local loopBudget = roundLimit
-
-	while loopBudget > 0 do
-		loopBudget -= 1
+	local firstTurn = true
+	while true do
+		-- An uncapped task must yield so Studio can draw and process Stop.
+		task.wait()
 
 		if StateManager.get() == "CANCELLED" then
 			cancelled = true
 			break
 		end
 
-		if loopBudget < roundLimit - 1 then
+		if not firstTurn then
 			message = addMessage("assistant", "", { taskId = taskId, model = profile.modelId, streaming = true })
 		end
+		firstTurn = false
 		-- `toolDefinitions` is the gate for native tool calling: without it `tools`
 -- stayed nil and the whole tool-call branch below was unreachable.
 		local spec = prepareSpec(profile, conversation, options.mode, taskId, ToolValidator.toDefinitions(options.mode))
@@ -4204,7 +4201,7 @@ local function runTaskImpl(options: {
 		})
 		local finish = string.lower(tostring(turn.stopReason or ""))
 		if finish == "length" or finish == "max_tokens" or finish == "max_output_tokens" then
-			if #turn.toolCalls == 0 and continuations < 3 and loopBudget > 0 then
+			if #turn.toolCalls == 0 and continuations < 3 then
 				continuations += 1
 				StateManager.setActivity("Continuing after the provider output limit")
 				addMessage("user", "Continue the unfinished answer exactly where you stopped, without repeating earlier text. Complete the original task using available tools when needed.", { taskId = taskId, internal = true })
@@ -4261,17 +4258,11 @@ local function runTaskImpl(options: {
 			end
 
 			if action.action == "done" then
-				taskComplete = true
 				break
 			end
 
 			toolCallCount += 1
-			if toolCallCount > settings.maxToolCalls then
-				terminalReason = string.format("The tool call limit of %d was reached. Completed steps were kept; increase the limit in Settings > Agent or send a follow-up.", settings.maxToolCalls)
-				break
-			end
-
-			local outcome = executeLimited(action.action, action.arguments, Time.newId("act"))
+			local outcome = executeAction(action.action, action.arguments, Time.newId("act"))
 
 			EventBus.emit(EventBus.Events.BuildProgress, {
 				phase = "toolResult",
@@ -4303,24 +4294,26 @@ local function runTaskImpl(options: {
 			StateManager.transition("ANALYZING", { taskId = taskId, activity = "Deciding what to do" })
 
 			local recordedCalls = {}
+			local requestedCalls = {}
 			for _, call in turn.toolCalls do
-				recordedCalls[#recordedCalls + 1] = { id = call.id, name = call.name, arguments = call.arguments, state = "requested" }
+				local record = { id = call.id, name = call.name, arguments = call.arguments, state = "requested" }
+				recordedCalls[#recordedCalls + 1] = record
+				requestedCalls[#requestedCalls + 1] = table.clone(record)
 			end
-			SessionManager.updateMessage(message.id, { toolCalls = recordedCalls })
+			-- Publish a snapshot. Mutating the transcript's shared records during
+			-- each action otherwise rebuilds the whole batch on every tool result.
+			SessionManager.updateMessage(message.id, { toolCalls = requestedCalls })
 
 			local anyExecuted = false
 			for _, call in turn.toolCalls do
+				task.wait()
 				if StateManager.get() == "CANCELLED" then
 					cancelled = true
 					break
 				end
 
 				toolCallCount += 1
-				if toolCallCount > settings.maxToolCalls then
-					terminalReason = string.format("The tool call limit of %d was reached. Completed steps were kept; increase the limit in Settings > Agent or send a follow-up.", settings.maxToolCalls)
-				end
-
-				local outcome = executeLimited(call.name, call.arguments, call.id)
+				local outcome = executeAction(call.name, call.arguments, call.id)
 				for _, recorded in recordedCalls do
 					if recorded.id == call.id then
 						recorded.state = if outcome.ok then "completed" else "failed"
@@ -4352,11 +4345,7 @@ local function runTaskImpl(options: {
 		end
 
 		-- 3. Plain answer --------------------------------------------------------
-		taskComplete = true
 		break
-	end
-	if loopBudget == 0 and not taskComplete and not cancelled and not providerFailed and not terminalReason then
-		terminalReason = "The agent reached its turn limit. Completed steps and the partial answer were kept; send a follow-up to continue."
 	end
 	if terminalReason then
 		addMessage("assistant", terminalReason, { taskId = taskId })
@@ -9853,10 +9842,10 @@ end
 --=============================================================================
 
 --- Called by the question card when the user submits.
-function QuestionManager.submit(value: any)
+function QuestionManager.submit(value: any, questionId: string?): boolean
 	local question = pending
-	if not question then
-		return
+	if not question or question.answered or (questionId and questionId ~= question.id) then
+		return false
 	end
 
 	local cleaned = QuestionManager.validate(question, value)
@@ -9865,7 +9854,7 @@ function QuestionManager.submit(value: any)
 			kind = "error",
 			message = "That answer is not valid for this question.",
 		})
-		return
+		return false
 	end
 
 	question.answered = true
@@ -9886,13 +9875,14 @@ function QuestionManager.submit(value: any)
 	if callback then
 		callback(cleaned)
 	end
+	return true
 end
 
 --- Called when the user cancels the question.
-function QuestionManager.cancel(reason: string?)
+function QuestionManager.cancel(reason: string?, questionId: string?): boolean
 	local question = pending
-	if not question then
-		return
+	if not question or question.answered or (questionId and questionId ~= question.id) then
+		return false
 	end
 	question.answered = true
 	question.answer = nil
@@ -9910,12 +9900,13 @@ function QuestionManager.cancel(reason: string?)
 	if callback then
 		callback(reason or "The user cancelled the question.")
 	end
+	return true
 end
 
 --- "Let AI Decide" — asks the model to choose using its own judgement.
-function QuestionManager.letAiDecide(): boolean
+function QuestionManager.letAiDecide(questionId: string?): boolean
 	local question = pending
-	if not question then
+	if not question or question.answered or (questionId and questionId ~= question.id) then
 		return false
 	end
 	if not question.allowAiDecide then
@@ -9953,6 +9944,12 @@ end
 
 --- Returns a cleaned answer, or nil when the value does not satisfy the question.
 function QuestionManager.validate(question: Question, value: any): any
+	if type(value) == "table" and value.__custom == true then
+		if not question.allowCustom or type(value.text) ~= "string" then return nil end
+		local text = StringUtil.trim(value.text)
+		if text == "" then return nil end
+		return if question.kind == "multiple" then { text } else text
+	end
 	if question.kind == "text" then
 		if type(value) ~= "string" then
 			return nil
@@ -9982,9 +9979,6 @@ function QuestionManager.validate(question: Question, value: any): any
 	if question.kind == "single" then
 		if type(value) ~= "string" then
 			return nil
-		end
-		if value == "__custom__" then
-			return { __custom = true }
 		end
 		for _, option in (question.options or {}) do
 			if option.id == value then
@@ -12177,13 +12171,10 @@ AGENT SETTINGS (respect these):
 - Default mode: %s
 - Auto-ask when a decision matters: %s
 - Let the AI decide on its own when allowed: %s
-- Maximum tool calls per task: %d
-- Maximum build actions per task: %d]],
+- Continue tool calls and build actions until the task is complete, the user stops it, or an error prevents progress.]],
 		settings.defaultMode,
 		tostring(settings.autoAsk),
-		tostring(settings.letAiDecide),
-		settings.maxToolCalls,
-		settings.maxBuildActions
+		tostring(settings.letAiDecide)
 	)
 
 	return table.concat(sections, "\n")
@@ -14520,9 +14511,8 @@ export type Settings = {
 	autoAsk: boolean,
 	letAiDecide: boolean,
 	autoApproveReadOnly: boolean,
+	alwaysApproveActions: boolean,
 	toolPermissions: { [string]: boolean },
-	maxToolCalls: number,
-	maxBuildActions: number,
 	streamResponses: boolean,
 	bridgeEnabled: boolean,
 	bridgeUrl: string,
@@ -14551,9 +14541,8 @@ local function defaultSettings(): Settings
 		autoAsk = true,
 		letAiDecide = true,
 		autoApproveReadOnly = true,
+		alwaysApproveActions = false,
 		toolPermissions = {},
-		maxToolCalls = 40,
-		maxBuildActions = 200,
 		streamResponses = true,
 		bridgeEnabled = true,
 		bridgeUrl = "http://127.0.0.1:20129",
@@ -20414,18 +20403,37 @@ function ChatInput.build(options: any): (Frame, any)
 		resize()
 		refresh()
 	end
-	local function isShift(): boolean
+	local function isShift(key: InputObject?): boolean
+		-- Studio's docked text editor can omit Shift InputBegan/IsKeyDown.
+		-- The Return event itself carries the modifier state, including FocusLost.
+		if key then
+			local ok, shifted = pcall(function() return key:IsModifierKeyDown(Enum.ModifierKey.Shift) end)
+			if ok then return shifted end
+		end
 		return leftShiftDown or rightShiftDown or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
 	end
 	local keyboardConnections: { RBXScriptConnection } = {}
 	local boundGui: Instance? = nil
 	local enterPending = false
-	local function enter(newLine: boolean)
+	local handledReturn: { [InputObject]: boolean } = setmetatable({}, { __mode = "k" })
+	local lastCursor, lastSelection = -1, -1
+	local function rememberCaret()
+		if box:IsFocused() and box.CursorPosition > 0 then
+			lastCursor, lastSelection = box.CursorPosition, box.SelectionStart
+		end
+	end
+	box:GetPropertyChangedSignal("CursorPosition"):Connect(rememberCaret)
+	box:GetPropertyChangedSignal("SelectionStart"):Connect(rememberCaret)
+	local function enter(newLine: boolean, key: InputObject?)
 		if destroyed or enterPending then return end
+		if key and handledReturn[key] then return end
+		if key then handledReturn[key] = true end
 		enterPending = true
 		local text = box.Text
-		local cursor = if box.CursorPosition > 0 then math.clamp(box.CursorPosition, 1, #text + 1) else #text + 1
-		local selection = box.SelectionStart
+		-- FocusLost can reset native cursor/selection to -1 before it fires.
+		local position = if box.CursorPosition > 0 then box.CursorPosition else lastCursor
+		local cursor = if position > 0 then math.clamp(position, 1, #text + 1) else #text + 1
+		local selection = if box.CursorPosition > 0 then box.SelectionStart else lastSelection
 		local first, last = cursor, cursor
 		if selection and selection > 0 then
 			selection = math.clamp(selection, 1, #text + 1)
@@ -20452,7 +20460,7 @@ function ChatInput.build(options: any): (Frame, any)
 		if key.KeyCode == Enum.KeyCode.LeftShift then leftShiftDown = true end
 		if key.KeyCode == Enum.KeyCode.RightShift then rightShiftDown = true end
 		if (key.KeyCode == Enum.KeyCode.Return or key.KeyCode == Enum.KeyCode.KeypadEnter) and box:IsFocused() then
-			enter(isShift())
+			enter(isShift(key), key)
 		end
 	end
 	local function inputEnded(key: InputObject)
@@ -20478,12 +20486,16 @@ function ChatInput.build(options: any): (Frame, any)
 	end
 	frame.AncestryChanged:Connect(bindKeyboard)
 
-	box.FocusLost:Connect(function(enterPressed)
-		if enterPressed and not enterPending then enter(isShift()) end
+	box.FocusLost:Connect(function(enterPressed, inputThatCausedFocusLoss)
+		if enterPressed and not enterPending then enter(isShift(inputThatCausedFocusLoss), inputThatCausedFocusLoss) end
 		if not enterPending then leftShiftDown, rightShiftDown = false, false end
 		refresh()
 	end)
-	box.Focused:Connect(refresh)
+	box.Focused:Connect(function()
+		lastCursor = if box.CursorPosition > 0 then box.CursorPosition else #box.Text + 1
+		lastSelection = box.SelectionStart
+		refresh()
+	end)
 	box:GetPropertyChangedSignal("Text"):Connect(function() resize(); refresh() end)
 	box:GetPropertyChangedSignal("AbsoluteSize"):Connect(resize)
 	action.MouseButton1Click:Connect(function()
@@ -21035,18 +21047,19 @@ function ChatView.build(parent: GuiObject, hooks: any): (Frame, any)
 		approvalCard = card
 		card.LayoutOrder = 9100
 		card.Parent = cards
-		local row, add = Components.buttonRow({ columns = 2 })
+		local row, add = Components.buttonRow({ columns = 3, minColumnWidth = 128 })
 		row.Parent = body
 		local answered = false
-		local function answer(value: boolean)
+		local function answer(value: boolean, always: boolean?)
 			if answered then return end
 			answered = true
-			AgentController.resolveApproval(value)
+			AgentController.resolveApproval(value, always)
 			card:Destroy()
 			approvalCard = nil
 		end
 		add("Approve", { accent = true, order = 1 }).MouseButton1Click:Connect(function() answer(true) end)
 		add("Decline", { order = 2 }).MouseButton1Click:Connect(function() answer(false) end)
+		add("Always Approve", { order = 3 }).MouseButton1Click:Connect(function() answer(true, true) end)
 		follow = true
 		task.defer(scrollBottom)
 	end)
@@ -21289,9 +21302,13 @@ function Components.buttonRow(options: {
 	padding: number?,
 	align: Enum.HorizontalAlignment?,
 	columns: number?,
+	minColumnWidth: number?,
 }?): (Frame, any)
 	local o = options or {}
 	local columns = o.columns
+	local activeColumns = columns or 1
+	local grid: UIGridLayout? = nil
+	local count = 0
 	local padding = o.padding or Theme.Space.SM
 	local height = Theme.Metrics.ButtonHeight
 	local row = Instance.new("Frame")
@@ -21304,7 +21321,7 @@ function Components.buttonRow(options: {
 	row.LayoutOrder = o.order or 0
 
 	if columns and columns > 1 then
-		local grid = Instance.new("UIGridLayout")
+		grid = Instance.new("UIGridLayout")
 		grid.SortOrder = Enum.SortOrder.LayoutOrder
 		grid.CellSize = UDim2.new(1 / columns, -padding * (columns - 1) / columns, 0, height)
 		grid.CellPadding = UDim2.fromOffset(padding, padding)
@@ -21324,7 +21341,17 @@ function Components.buttonRow(options: {
 		layout.Parent = row
 	end
 
-	local count = 0
+	local function reflow()
+		if not grid then return end
+		if o.minColumnWidth then
+			activeColumns = math.clamp(math.floor((row.AbsoluteSize.X + padding) / (o.minColumnWidth + padding)), 1, columns or 1)
+		end
+		grid.CellSize = UDim2.new(1 / activeColumns, -padding * (activeColumns - 1) / activeColumns, 0, height)
+		grid.FillDirectionMaxCells = activeColumns
+		local rows = math.max(1, math.ceil(count / activeColumns))
+		row.Size = UDim2.new(1, 0, 0, rows * height + (rows - 1) * padding)
+	end
+	if o.minColumnWidth then row:GetPropertyChangedSignal("AbsoluteSize"):Connect(reflow) end
 	return row, function(text: string, buttonOptions: { accent: boolean?, order: number?, height: number? }?)
 		local bo = buttonOptions or {}
 		local buttonHeight = bo.height or height
@@ -21335,8 +21362,7 @@ function Components.buttonRow(options: {
 		})
 		if columns and columns > 1 then
 			count += 1
-			local rows = math.ceil(count / columns)
-			row.Size = UDim2.new(1, 0, 0, rows * height + (rows - 1) * padding)
+			reflow()
 			-- Fill the grid cell it lands in; the grid decides the wrap.
 			button.Size = UDim2.new(1, 0, 0, buttonHeight)
 			Theme.minSize(button, Vector2.new(0, buttonHeight))
@@ -21947,19 +21973,21 @@ function Disclosure.build(parent: Instance, options: any): (Frame, any)
 	Theme.passThrough(frame)
 	frame.Parent = parent
 	Theme.listLayout(5).Parent = frame
-	local header = Instance.new("Frame")
+	local header = options.header or Instance.new("Frame")
 	header.Name = "Header"
 	header.Size = UDim2.new(1, 0, 0, 28)
 	Theme.passThrough(header)
 	header.Parent = frame
-	local icon = Icons.glyph(options.icon or "Tool", 16, Theme.Colors.Highlight)
-	icon.Name = "ActivityIcon"
-	icon.Position = UDim2.fromOffset(0, 6)
-	icon.Parent = header
+	if not options.header then
+		local icon = Icons.glyph(options.icon or "Tool", 16, Theme.Colors.Highlight)
+		icon.Name = "ActivityIcon"
+		icon.Position = UDim2.fromOffset(0, 6)
+		icon.Parent = header
+	end
 	local toggle = Theme.textButton("", { height = 28 })
 	toggle.Name = "Toggle"
-	toggle.Position = UDim2.fromOffset(22, 0)
-	toggle.Size = UDim2.new(1, -22, 1, 0)
+	toggle.Position = if options.header then UDim2.new(1, -28, 0, 0) else UDim2.fromOffset(22, 0)
+	toggle.Size = if options.header then UDim2.fromOffset(28, 28) else UDim2.new(1, -22, 1, 0)
 	toggle.BackgroundTransparency = 1
 	toggle.TextXAlignment = Enum.TextXAlignment.Left
 	toggle.TextSize = 12
@@ -21980,6 +22008,12 @@ function Disclosure.build(parent: Instance, options: any): (Frame, any)
 	text.Name = options.textName or "Detail"
 	text.RichText = false
 	text.Parent = scroll
+	local body: GuiObject? = options.body
+	if body then
+		text.Visible = false
+		body.Size = UDim2.new(1, -8, 0, 0)
+		body.Parent = scroll
+	end
 	local footer = Instance.new("Frame")
 	footer.Name = "Footer"
 	footer.Size = UDim2.new(1, 0, 0, 24)
@@ -22005,15 +22039,16 @@ function Disclosure.build(parent: Instance, options: any): (Frame, any)
 	end
 	local expanded = options.expanded == true
 	local function resize()
-		local bounds = TextService:GetTextSize(text.Text, text.TextSize, text.Font, Vector2.new(math.max(120, scroll.AbsoluteSize.X - 12), 1000000))
-		scroll.Size = UDim2.new(1, 0, 0, math.clamp(bounds.Y + 8, 24, options.maxHeight or 260))
+		local height = if body then body.AbsoluteSize.Y else TextService:GetTextSize(text.Text, text.TextSize, text.Font, Vector2.new(math.max(120, scroll.AbsoluteSize.X - 12), 1000000)).Y
+		local target = math.clamp(height + 8, 24, options.maxHeight or 260)
+		if scroll.Size.Y.Offset ~= target then scroll.Size = UDim2.new(1, 0, 0, target) end
 	end
 	local function refresh()
 		scroll.Visible = expanded
 		footer.Visible = expanded
 		preview.Visible = not expanded and options.preview == true
 		preview.Text = text.Text:match("([^\r\n]+)") or ""
-		Icons.setButton(toggle, if expanded then "ChevronDown" else "ChevronRight", options.title or "Details")
+		Icons.setButton(toggle, if expanded then "ChevronDown" else "ChevronRight", if options.header then nil else (options.title or "Details"))
 		resize()
 	end
 	local function setExpanded(value: boolean)
@@ -22024,6 +22059,7 @@ function Disclosure.build(parent: Instance, options: any): (Frame, any)
 	toggle.MouseButton1Click:Connect(function() setExpanded(not expanded) end)
 	close.MouseButton1Click:Connect(function() setExpanded(false) end)
 	scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(resize)
+	if body then body:GetPropertyChangedSignal("AbsoluteSize"):Connect(resize) end
 	refresh()
 	return frame, {
 		setText = function(value: string) text.Text = value; refresh() end,
@@ -25185,7 +25221,7 @@ return ProviderView
       <Item class="ModuleScript" referent="70">
         <Properties>
           <string name="Name">QuestionCard</string>
-          <string name="Source">--!strict
+          <string name="Source"><![CDATA[--!strict
 --[[
 	ForgePilot / UI / QuestionCard
 	Renders an interactive question inside the chat.
@@ -25199,6 +25235,8 @@ local QuestionManager = require(script.Parent.Parent.AI.QuestionManager)
 local StringUtil = require(script.Parent.Parent.Utilities.StringUtil)
 
 local Theme = require(script.Parent.Parent.Utilities.Theme)
+local Disclosure = require(script.Parent.Disclosure)
+local Components = require(script.Parent.Components)
 
 local QuestionCard = {}
 
@@ -25221,9 +25259,9 @@ local liveListeners: { [Frame]: any } = setmetatable({}, { __mode = "k" })
 
 local function releaseListener(card: Frame)
 	local listener = liveListeners[card]
-	if listener then
-		listener:Disconnect()
-		liveListeners[card] = nil
+	if listener and listener.connection then
+		listener.connection:Disconnect()
+		listener.connection = nil
 	end
 end
 
@@ -25246,7 +25284,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 	Theme.padding(12).Parent = card
 
 	local content = Instance.new("Frame")
-	content.Name = "Content"
+	content.Name = "QuestionBody"
 	content.Size = UDim2.new(1, 0, 0, 0)
 	content.AutomaticSize = Enum.AutomaticSize.Y
 	content.BackgroundTransparency = 1
@@ -25263,6 +25301,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 	local icon = Icons.glyph("Lightbulb", 13, accent)
 	icon.Name = "Icon"
 	icon.Size = UDim2.fromOffset(15, 15)
+	icon.Position = UDim2.fromOffset(0, 6)
 	icon.Parent = headerRow
 
 	local kindLabel = Theme.label("Question · " .. tostring(question.kind):upper(), {
@@ -25272,7 +25311,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 	})
 	kindLabel.Name = "Kind"
 	kindLabel.Position = UDim2.fromOffset(20, 0)
-	kindLabel.Size = UDim2.new(1, -20, 1, 0)
+	kindLabel.Size = UDim2.new(1, -54, 1, 0)
 	kindLabel.Parent = headerRow
 
 	local promptLabel = Theme.label(question.prompt, {
@@ -25284,10 +25323,11 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 	promptLabel.Name = "Prompt"
 	promptLabel.Size = UDim2.new(1, 0, 0, 0)
 	promptLabel.AutomaticSize = Enum.AutomaticSize.Y
+	promptLabel.LayoutOrder = 1
 	promptLabel.Parent = content
 
 	local detailLabel: TextLabel? = nil
-	if question.detail and #question.detail &gt; 0 then
+	if question.detail and #question.detail > 0 then
 		detailLabel = Theme.label(question.detail, {
 			size = Theme.TextSizes.Small,
 			color = Theme.Colors.SecondaryText,
@@ -25297,6 +25337,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		detailLabel.Name = "Detail"
 		detailLabel.Size = UDim2.new(1, 0, 0, 0)
 		detailLabel.AutomaticSize = Enum.AutomaticSize.Y
+		detailLabel.LayoutOrder = 2
 		detailLabel.Parent = content
 	end
 
@@ -25307,6 +25348,10 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 	local numberInput: TextBox? = nil
 	local textInput: TextBox? = nil
 	local submitted = false
+	local function clearHint()
+		local hint = content:FindFirstChild("ValidationHint")
+		if hint then hint:Destroy() end
+	end
 
 	local function lock()
 		if submitted then
@@ -25317,6 +25362,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		for _, child in content:GetDescendants() do
 			if child:IsA("TextButton") then
 				child.Active = false
+				child.Interactable = false
 				child.AutoButtonColor = false
 				child.BackgroundTransparency = 1
 			elseif child:IsA("TextBox") then
@@ -25353,7 +25399,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		button.MouseLeave:Connect(function()
 			Theme.tween(button, { BackgroundColor3 = base }, Theme.Motion.Fast):Play()
 		end)
-		button.MouseButton1Click:Connect(callback)
+		button.MouseButton1Click:Connect(function() if not submitted then callback() end end)
 		return button
 	end
 
@@ -25364,6 +25410,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		list.Size = UDim2.new(1, 0, 0, 0)
 		list.AutomaticSize = Enum.AutomaticSize.Y
 		list.BackgroundTransparency = 1
+		list.LayoutOrder = 3
 		list.Parent = content
 		Theme.listLayout(5).Parent = list
 
@@ -25403,7 +25450,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 			label.AutomaticSize = Enum.AutomaticSize.Y
 			label.Parent = optionButton
 
-			if option.description and #option.description &gt; 0 then
+			if option.description and #option.description > 0 then
 				local desc = Theme.label(option.description, {
 					size = Theme.TextSizes.Caption,
 					color = Theme.Extra.Muted,
@@ -25420,8 +25467,10 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 			optionButtons[option.id] = optionButton
 
 			optionButton.MouseButton1Click:Connect(function()
+				if submitted then return end
+				clearHint()
 				if question.kind == "single" then
-					selected = {}
+					selected = { [option.id] = true }
 					for id, other in optionButtons do
 						local otherMarker = other:FindFirstChild("Marker") :: TextLabel?
 						if otherMarker then
@@ -25469,6 +25518,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		box.Size = UDim2.new(1, 0, 0, if numeric then Theme.Metrics.InputHeight else 64)
 		box.AutomaticSize = if numeric then Enum.AutomaticSize.None else Enum.AutomaticSize.None
 		box.TextYAlignment = if numeric then Enum.TextYAlignment.Center else Enum.TextYAlignment.Top
+		box.LayoutOrder = 4
 		box.Parent = content
 		return box
 	end
@@ -25482,6 +25532,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		row.Name = "YesNo"
 		row.Size = UDim2.new(1, 0, 0, 30)
 		row.BackgroundTransparency = 1
+		row.LayoutOrder = 4
 		row.Parent = content
 		local rowLayout = Instance.new("UIListLayout")
 		rowLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -25491,15 +25542,13 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 
 		local yesButton = pill("Yes", true, 1, function()
 			selected = { yes = true }
-			lock()
-			QuestionManager.submit(true)
+			if QuestionManager.submit(true, question.id) then lock() end
 		end)
 		yesButton.Parent = row
 
 		local noButton = pill("No", false, 2, function()
 			selected = { yes = false }
-			lock()
-			QuestionManager.submit(false)
+			if QuestionManager.submit(false, question.id) then lock() end
 		end)
 		noButton.Parent = row
 	end
@@ -25508,6 +25557,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 	if question.allowCustom and question.kind ~= "text" and question.kind ~= "number" then
 		local toggle = Instance.new("TextButton")
 		toggle.Name = "CustomToggle"
+		toggle.LayoutOrder = 5
 		toggle.Size = UDim2.new(1, 0, 0, 24)
 		toggle.BackgroundTransparency = 1
 		Icons.setButton(toggle, "Edit", "Custom answer")
@@ -25518,6 +25568,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		toggle.Parent = content
 
 		toggle.MouseButton1Click:Connect(function()
+			if submitted then return end
 			if customInput then
 				customInput:Destroy()
 				customInput = nil
@@ -25527,7 +25578,7 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 			local box = Theme.input("Type your own answer", { multiLine = true })
 			box.Name = "CustomInput"
 			box.Size = UDim2.new(1, 0, 0, 56)
-			box.LayoutOrder = 99
+			box.LayoutOrder = 6
 			box.Parent = content
 			customInput = box
 			Icons.setButton(toggle, "Close", "Cancel custom answer")
@@ -25536,33 +25587,31 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 	end
 
 	-- Action row ----------------------------------------------------------
-	local actions = Instance.new("Frame")
+	local actions, addAction = Components.buttonRow({ columns = 3, minColumnWidth = 128, padding = 6 })
 	actions.Name = "Actions"
-	actions.Size = UDim2.new(1, 0, 0, 28)
-	actions.BackgroundTransparency = 1
+	actions.LayoutOrder = 7
 	actions.Parent = content
-
-	local actionLayout = Instance.new("UIListLayout")
-	actionLayout.FillDirection = Enum.FillDirection.Horizontal
-	actionLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	actionLayout.Padding = UDim.new(0, 6)
-	actionLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	actionLayout.Parent = actions
+	local function actionButton(text: string, primary: boolean, order: number, callback: () -> ()): TextButton
+		local button = addAction(text, { accent = primary, order = order, height = 28 })
+		button.MouseButton1Click:Connect(function() if not submitted then callback() end end)
+		return button
+	end
 
 	local function submitCurrent()
+		if submitted then return end
 		local value: any = nil
 
-		if customInput and #StringUtil.trim(customInput.Text) &gt; 0 then
-			value = "__custom__"
+		if customInput and #StringUtil.trim(customInput.Text) > 0 then
+			value = { __custom = true, text = customInput.Text }
 		elseif question.kind == "text" then
 			value = textInput and textInput.Text or ""
 		elseif question.kind == "number" then
 			value = numberInput and tonumber(numberInput.Text) or ""
 		elseif question.kind == "multiple" then
 			local chosen = {}
-			for id, isSelected in selected do
-				if isSelected then
-					chosen[#chosen + 1] = id
+			for _, option in (question.options or {}) do
+				if selected[option.id] then
+					chosen[#chosen + 1] = option.id
 				end
 			end
 			value = chosen
@@ -25573,22 +25622,20 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 			end
 		end
 
-		-- Custom free text replaces the sentinel the validator expects.
-		if value == "__custom__" and customInput then
-			value = "__custom__"
-		end
-
 		local cleaned = QuestionManager.validate(question, value)
 		if cleaned == nil then
+			clearHint()
 			local hint = Instance.new("TextLabel")
 			hint.Name = "ValidationHint"
-			hint.Size = UDim2.new(1, 0, 0, 18)
+			hint.Size = UDim2.new(1, 0, 0, 0)
+			hint.AutomaticSize = Enum.AutomaticSize.Y
+			hint.TextWrapped = true
 			hint.BackgroundTransparency = 1
 			hint.TextColor3 = Theme.Colors.Error
 			hint.TextSize = Theme.TextSizes.Caption
 			hint.Text = question.required and "Choose or enter an answer first." or "That value is not valid."
-			hint.Parent = actions
-			hint.LayoutOrder = 90
+			hint.Parent = content
+			hint.LayoutOrder = 8
 			task.delay(3, function()
 				if hint.Parent then
 					hint:Destroy()
@@ -25597,36 +25644,28 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 			return
 		end
 
-		-- Free-form custom text is carried through explicitly.
-		if question.kind == "single" and value == "__custom__" and customInput then
-			cleaned = StringUtil.trim(customInput.Text)
-		elseif question.kind == "multiple" and customInput and #StringUtil.trim(customInput.Text) &gt; 0 then
-			cleaned = { StringUtil.trim(customInput.Text) }
-		end
-
-		lock()
-		QuestionManager.submit(cleaned)
+		-- The manager accepts the original IDs/custom payload and cleans it once.
+		clearHint()
+		if QuestionManager.submit(value, question.id) then lock() end
 	end
 
 	local order = 0
 	order += 1
-	local submitButton = pill("Submit answer", true, order, submitCurrent)
+	local submitButton = actionButton("Submit answer", true, order, submitCurrent)
 	submitButton.Parent = actions
 
 	if question.kind ~= "boolean" and question.kind ~= "confirm" then
 		order += 1
-		local cancelButton = pill("Cancel", false, order, function()
-			lock()
-			QuestionManager.cancel("The user cancelled the question.")
+		local cancelButton = actionButton("Cancel", false, order, function()
+			if QuestionManager.cancel("The user cancelled the question.", question.id) then lock() end
 		end)
 		cancelButton.Parent = actions
 	end
 
 	if question.allowAiDecide then
 		order += 1
-		local decideButton = pill("Let AI decide", false, order, function()
-			lock()
-			QuestionManager.letAiDecide()
+		local decideButton = actionButton("Let AI decide", false, order, function()
+			if QuestionManager.letAiDecide(question.id) then lock() end
 		end)
 		decideButton.Parent = actions
 	end
@@ -25647,44 +25686,49 @@ function QuestionCard.build(question: any): (Frame, { [string]: any })
 		end)
 	end
 
-	liveListeners[card] = listener
+	local _, disclosure = Disclosure.build(card, {
+		name = "QuestionDisclosure", header = headerRow, body = content,
+		text = question.prompt, expanded = false, preview = true, maxHeight = 260,
+	})
+	local answered = false
+	liveListeners[card] = {
+		connection = listener,
+		onAnswered = function(answer: any)
+			if answered then return end
+			answered = true
+			releaseListener(card)
+			lock()
+			promptLabel.Text = question.prompt .. "\n\nAnswer: " .. QuestionManager.formatAnswer(answer)
+			kindLabel.Text = "Question · Answered"
+			kindLabel.TextColor3 = Theme.Colors.Success
+			actions.Visible = false
+			for _, name in { "Options", "CustomToggle", "CustomInput", "Input", "YesNo" } do
+				local child = content:FindFirstChild(name)
+				if child and child:IsA("GuiObject") then child.Visible = false end
+			end
+			disclosure.setText("Answer: " .. QuestionManager.formatAnswer(answer))
+			disclosure.setExpanded(false)
+		end,
+	}
+	card.Destroying:Connect(function() releaseListener(card); liveListeners[card] = nil end)
 
 	return card, {
 		cleanup = function()
 			releaseListener(card)
 		end,
+		setExpanded = disclosure.setExpanded,
+		isExpanded = disclosure.isExpanded,
 	}
 end
 
 --- Renders the answered state into an existing card.
 function QuestionCard.markAnswered(card: Frame, answer: any)
-	-- The card is no longer editable, so drop its input listener first.
-	releaseListener(card)
-
-	local promptLabel = card:FindFirstChild("Content") and (card.Content:FindFirstChild("Prompt") :: TextLabel?)
-	if not promptLabel then
-		return
-	end
-	promptLabel.Text ..= string.format("\n\nAnswer: %s", QuestionManager.formatAnswer(answer))
-
-	local actions = card.Content:FindFirstChild("Actions")
-	if actions then
-		for _, child in actions:GetChildren() do
-			if child:IsA("Frame") then
-				child:Destroy()
-			end
-		end
-	end
-
-	local options = card.Content:FindFirstChild("Options")
-	if options then
-		options.Visible = false
-	end
-
-	card.BackgroundTransparency = 0.4
+	local controller = liveListeners[card]
+	if controller then controller.onAnswered(answer) end
 end
 
-return QuestionCard</string>
+return QuestionCard
+]]></string>
         </Properties>
       </Item>
       <Item class="ModuleScript" referent="71">
@@ -25708,6 +25752,7 @@ local RetryDelayCalculator = require(script.Parent.Parent.AI.RetryDelayCalculato
 local SmartAutoRetryManager = require(script.Parent.Parent.AI.SmartAutoRetryManager)
 local Theme = require(script.Parent.Parent.Utilities.Theme)
 local Time = require(script.Parent.Parent.Utilities.Time)
+local Disclosure = require(script.Parent.Disclosure)
 
 local RetryStatusUI = {}
 
@@ -25779,6 +25824,12 @@ function RetryStatusUI.build(options: {
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Padding = UDim.new(0, 6)
 	layout.Parent = card
+	local body = Instance.new("Frame")
+	body.Name = "RetryBody"
+	body.Size = UDim2.new(1, 0, 0, 0)
+	body.AutomaticSize = Enum.AutomaticSize.Y
+	Theme.passThrough(body)
+	Theme.listLayout(6).Parent = body
 
 	-- Header ------------------------------------------------------------
 	local header = Instance.new("Frame")
@@ -25791,7 +25842,7 @@ function RetryStatusUI.build(options: {
 	local icon = Icons.glyph("Warning", 14, colour)
 	icon.Name = "Icon"
 	icon.Size = UDim2.fromOffset(17, 17)
-	icon.Position = UDim2.fromOffset(0, 1)
+	icon.Position = UDim2.fromOffset(0, 6)
 	icon.Parent = header
 
 	local headline = Theme.label(
@@ -25800,7 +25851,7 @@ function RetryStatusUI.build(options: {
 	)
 	headline.Name = "Headline"
 	headline.Position = UDim2.fromOffset(22, 0)
-	headline.Size = UDim2.new(1, -22, 1, 0)
+	headline.Size = UDim2.new(1, -54, 1, 0)
 	headline.TextTruncate = Enum.TextTruncate.AtEnd
 	headline.Parent = header
 
@@ -25815,7 +25866,7 @@ function RetryStatusUI.build(options: {
 	facts.Size = UDim2.new(1, 0, 0, 0)
 	facts.AutomaticSize = Enum.AutomaticSize.Y
 	facts.LayoutOrder = 2
-	facts.Parent = card
+	facts.Parent = body
 
 	local countdownLabel = Theme.label("", {
 		size = Theme.TextSizes.Body,
@@ -25826,7 +25877,7 @@ function RetryStatusUI.build(options: {
 	countdownLabel.Size = UDim2.new(1, 0, 0, 0)
 	countdownLabel.AutomaticSize = Enum.AutomaticSize.Y
 	countdownLabel.LayoutOrder = 3
-	countdownLabel.Parent = card
+	countdownLabel.Parent = body
 
 	local statusLabel = Theme.label("", {
 		size = Theme.TextSizes.Caption,
@@ -25838,7 +25889,7 @@ function RetryStatusUI.build(options: {
 	statusLabel.Size = UDim2.new(1, 0, 0, 0)
 	statusLabel.AutomaticSize = Enum.AutomaticSize.Y
 	statusLabel.LayoutOrder = 4
-	statusLabel.Parent = card
+	statusLabel.Parent = body
 
 	-- Progress bar --------------------------------------------------------
 	local track = Instance.new("Frame")
@@ -25848,7 +25899,7 @@ function RetryStatusUI.build(options: {
 	track.BackgroundColor3 = Theme.Extra.SurfaceRaised
 	track.BorderSizePixel = 0
 	track.ClipsDescendants = true
-	track.Parent = card
+	track.Parent = body
 	Theme.corner(3).Parent = track
 
 	local fill = Instance.new("Frame")
@@ -25870,7 +25921,7 @@ function RetryStatusUI.build(options: {
 	details.AutomaticSize = Enum.AutomaticSize.Y
 	details.Visible = false
 	details.LayoutOrder = 6
-	details.Parent = card
+	details.Parent = body
 
 	-- Actions ------------------------------------------------------------
 	local actions = Instance.new("Frame")
@@ -25878,7 +25929,7 @@ function RetryStatusUI.build(options: {
 	actions.Size = UDim2.new(1, 0, 0, 28)
 	actions.BackgroundTransparency = 1
 	actions.LayoutOrder = 7
-	actions.Parent = card
+	actions.Parent = body
 	local actionLayout = Instance.new("UIListLayout")
 	actionLayout.FillDirection = Enum.FillDirection.Horizontal
 	actionLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -25902,6 +25953,15 @@ function RetryStatusUI.build(options: {
 		button.TextSize = 11
 		button.TextTruncate = Enum.TextTruncate.AtEnd
 	end
+	local _, disclosure = Disclosure.build(card, {
+		name = "ProviderDisclosure", header = header, body = body,
+		expanded = false, preview = true, maxHeight = 260,
+	})
+	local function syncPreview()
+		disclosure.setText(countdownLabel.Text .. (if countdownLabel.Text ~= "" then " · " else "") .. statusLabel.Text)
+	end
+	countdownLabel:GetPropertyChangedSignal("Text"):Connect(syncPreview)
+	statusLabel:GetPropertyChangedSignal("Text"):Connect(syncPreview)
 
 	--=============================================================================
 	-- STATE
@@ -26130,9 +26190,14 @@ function RetryStatusUI.build(options: {
 			headline.TextColor3 = Theme.Colors.Success
 			countdownLabel.Text = "Continuing task."
 			statusLabel.TextColor3 = Theme.Colors.Success
+			retryNowButton.Interactable = false
+			cancelButton.Interactable = false
+			disclosure.setExpanded(false)
 			Theme.tween(card, { BackgroundTransparency = 0.4 }, Theme.Motion.Slow):Play()
 		elseif payload.state == "RETRIES_EXHAUSTED" then
 			state.finished = true
+			retryNowButton.Interactable = false
+			cancelButton.Interactable = false
 			stopHeartbeat()
 			headline.Text = "Retries Exhausted"
 			headline.TextColor3 = Theme.Colors.Error
@@ -26143,6 +26208,8 @@ function RetryStatusUI.build(options: {
 			end
 		elseif payload.state == "RETRY_CANCELLED" then
 			state.finished = true
+			retryNowButton.Interactable = false
+			cancelButton.Interactable = false
 			stopHeartbeat()
 			headline.Text = "Retry Cancelled"
 			countdownLabel.Text = payload.reason or "Cancelled."
@@ -26166,6 +26233,8 @@ function RetryStatusUI.build(options: {
 	end
 
 	return card, {
+		setExpanded = disclosure.setExpanded,
+		isExpanded = disclosure.isExpanded,
 		destroy = function()
 			destroyed = true
 			stopHeartbeat()
@@ -26388,7 +26457,7 @@ function SettingsView.build(parent: GuiObject): (Frame, any)
 			function(value)
 				SettingsManager.setValue("confirmDestructive", value)
 			end,
-			{ hint = "Always ask before deletions, script replacement and terrain fills." }
+			{ hint = "Ask before deletions, script replacement and terrain fills when Always Approve is off." }
 		)
 		destructiveRow.Parent = body
 
@@ -26443,36 +26512,15 @@ function SettingsView.build(parent: GuiObject): (Frame, any)
 		)
 		readOnlyRow.Parent = body1
 
-		local card2, body2 = Components.section("Limits", { order = 2 })
-		card2.Parent = scroll
-
-		local maxToolsRow, maxToolsHolder = Components.field("Maximum tool calls per task", {
-			hint = "The agent stops and reports when the limit is reached.",
-		})
-		maxToolsRow.Parent = body2
-		local maxToolsBox = Theme.input(tostring(SettingsManager.getValue("maxToolCalls")))
-		maxToolsBox.Size = UDim2.fromOffset(100, Theme.Metrics.InputHeight)
-		maxToolsBox.Parent = maxToolsHolder
-		maxToolsBox.FocusLost:Connect(function(enterPressed)
-			local parsed = tonumber(maxToolsBox.Text)
-			if parsed and enterPressed then
-				SettingsManager.setValue("maxToolCalls", math.clamp(math.floor(parsed), 1, 500))
-				maxToolsBox.Text = tostring(SettingsManager.getValue("maxToolCalls"))
-			end
+		local alwaysRow, _, setAlways = Components.toggle("Always Approve", SettingsManager.getValue("alwaysApproveActions") == true, function(value)
+			SettingsManager.setValue("alwaysApproveActions", value)
+		end, { hint = "Automatically approve enabled tools. Turn this off to restore approval questions." })
+		alwaysRow.Name = "AlwaysApproveActions"
+		alwaysRow.Parent = body1
+		local unsubscribeAlways = EventBus.on(EventBus.Events.ProvidersChanged, function()
+			setAlways(SettingsManager.getValue("alwaysApproveActions") == true)
 		end)
-
-		local maxActionsRow, maxActionsHolder = Components.field("Maximum build actions per task")
-		maxActionsRow.Parent = body2
-		local maxActionsBox = Theme.input(tostring(SettingsManager.getValue("maxBuildActions")))
-		maxActionsBox.Size = UDim2.fromOffset(100, Theme.Metrics.InputHeight)
-		maxActionsBox.Parent = maxActionsHolder
-		maxActionsBox.FocusLost:Connect(function(enterPressed)
-			local parsed = tonumber(maxActionsBox.Text)
-			if parsed and enterPressed then
-				SettingsManager.setValue("maxBuildActions", math.clamp(math.floor(parsed), 1, 5000))
-				maxActionsBox.Text = tostring(SettingsManager.getValue("maxBuildActions"))
-			end
-		end)
+		alwaysRow.Destroying:Connect(unsubscribeAlways)
 
 		local card3, body3 = Components.section("Tool permissions", {
 			subtitle = "Disable a tool to block it entirely. Write tools are additionally gated by mode.",

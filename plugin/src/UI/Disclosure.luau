@@ -14,19 +14,21 @@ function Disclosure.build(parent: Instance, options: any): (Frame, any)
 	Theme.passThrough(frame)
 	frame.Parent = parent
 	Theme.listLayout(5).Parent = frame
-	local header = Instance.new("Frame")
+	local header = options.header or Instance.new("Frame")
 	header.Name = "Header"
 	header.Size = UDim2.new(1, 0, 0, 28)
 	Theme.passThrough(header)
 	header.Parent = frame
-	local icon = Icons.glyph(options.icon or "Tool", 16, Theme.Colors.Highlight)
-	icon.Name = "ActivityIcon"
-	icon.Position = UDim2.fromOffset(0, 6)
-	icon.Parent = header
+	if not options.header then
+		local icon = Icons.glyph(options.icon or "Tool", 16, Theme.Colors.Highlight)
+		icon.Name = "ActivityIcon"
+		icon.Position = UDim2.fromOffset(0, 6)
+		icon.Parent = header
+	end
 	local toggle = Theme.textButton("", { height = 28 })
 	toggle.Name = "Toggle"
-	toggle.Position = UDim2.fromOffset(22, 0)
-	toggle.Size = UDim2.new(1, -22, 1, 0)
+	toggle.Position = if options.header then UDim2.new(1, -28, 0, 0) else UDim2.fromOffset(22, 0)
+	toggle.Size = if options.header then UDim2.fromOffset(28, 28) else UDim2.new(1, -22, 1, 0)
 	toggle.BackgroundTransparency = 1
 	toggle.TextXAlignment = Enum.TextXAlignment.Left
 	toggle.TextSize = 12
@@ -47,6 +49,12 @@ function Disclosure.build(parent: Instance, options: any): (Frame, any)
 	text.Name = options.textName or "Detail"
 	text.RichText = false
 	text.Parent = scroll
+	local body: GuiObject? = options.body
+	if body then
+		text.Visible = false
+		body.Size = UDim2.new(1, -8, 0, 0)
+		body.Parent = scroll
+	end
 	local footer = Instance.new("Frame")
 	footer.Name = "Footer"
 	footer.Size = UDim2.new(1, 0, 0, 24)
@@ -72,15 +80,16 @@ function Disclosure.build(parent: Instance, options: any): (Frame, any)
 	end
 	local expanded = options.expanded == true
 	local function resize()
-		local bounds = TextService:GetTextSize(text.Text, text.TextSize, text.Font, Vector2.new(math.max(120, scroll.AbsoluteSize.X - 12), 1000000))
-		scroll.Size = UDim2.new(1, 0, 0, math.clamp(bounds.Y + 8, 24, options.maxHeight or 260))
+		local height = if body then body.AbsoluteSize.Y else TextService:GetTextSize(text.Text, text.TextSize, text.Font, Vector2.new(math.max(120, scroll.AbsoluteSize.X - 12), 1000000)).Y
+		local target = math.clamp(height + 8, 24, options.maxHeight or 260)
+		if scroll.Size.Y.Offset ~= target then scroll.Size = UDim2.new(1, 0, 0, target) end
 	end
 	local function refresh()
 		scroll.Visible = expanded
 		footer.Visible = expanded
 		preview.Visible = not expanded and options.preview == true
 		preview.Text = text.Text:match("([^\r\n]+)") or ""
-		Icons.setButton(toggle, if expanded then "ChevronDown" else "ChevronRight", options.title or "Details")
+		Icons.setButton(toggle, if expanded then "ChevronDown" else "ChevronRight", if options.header then nil else (options.title or "Details"))
 		resize()
 	end
 	local function setExpanded(value: boolean)
@@ -91,6 +100,7 @@ function Disclosure.build(parent: Instance, options: any): (Frame, any)
 	toggle.MouseButton1Click:Connect(function() setExpanded(not expanded) end)
 	close.MouseButton1Click:Connect(function() setExpanded(false) end)
 	scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(resize)
+	if body then body:GetPropertyChangedSignal("AbsoluteSize"):Connect(resize) end
 	refresh()
 	return frame, {
 		setText = function(value: string) text.Text = value; refresh() end,
