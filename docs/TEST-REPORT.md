@@ -1,12 +1,12 @@
 # Verifikasi ForgePilot 3.5.0
 
-Tanggal verifikasi: 2026-10-11. Paket ini diuji secara lokal dengan data/account fixture, tanpa credential provider nyata.
+Tanggal verifikasi: 2026-10-12. Paket ini diuji secara lokal dengan data/account fixture, tanpa credential provider nyata.
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| Simulasi Luau pada module produksi | 729 pemeriksaan lulus; 0 kegagalan dan 0 warning |
+| Simulasi Luau pada module produksi | 776 pemeriksaan lulus; 0 kegagalan dan 0 warning |
 | Tes Node | 27 lulus; 16 bridge dan 11 runtime/installer |
-| Syntax Luau | 101 file compile tanpa error, termasuk harness yang dapat dibuat ulang |
+| Syntax Luau | 102 file compile tanpa error, termasuk harness yang dapat dibuat ulang |
 | Build plugin | RBXM dan RBXMX berhasil dibangun dengan Rojo |
 | Source hasil build XML | 88 script cocok dengan source: 1 main Script + 87 ModuleScript |
 | JSON Schema wire | 372 definisi valid pada 6 protokol / 12 request fixture |
@@ -22,7 +22,18 @@ Tanggal verifikasi: 2026-10-11. Paket ini diuji secara lokal dengan data/account
 - Agent runTask, stream controller, subscription retry, dan panel provider diuji bersama: HTTP 503 pulih setelah retry, state recovery tampil, run lock dilepas, dan teks thinking lama dibersihkan.
 - Event retry tanpa task ID, dari chat berbeda, sesudah completion, atau saat Stop tidak mengambil state tugas lain. Penguncian konfigurasi chat aktif dijelaskan di footer.
 - Menu beserta MenuDismiss ditutup saat editor disembunyikan, tombol dinonaktifkan, panel dilepas, widget ditutup, atau view dihancurkan.
-- 31 pemeriksaan tambahan lulus; hasil simulasi total 729 tanpa warning. Ini bukan pengujian interaksi native Studio.
+- Patch menu provider menambah 31 pemeriksaan dan mencapai 729 lulus pada baseline sebelum patch kontrol chat. Ini bukan pengujian interaksi native Studio.
+
+## Patch kontrol chat dan penghapusan budget tool/build
+
+- Regresi awal mereproduksi 8 kegagalan Question, jawaban kustom, Shift+Enter, Always Approve, dan panel Provider Limit sebelum perbaikan.
+- Widget Question dan QuestionManager produksi diuji bersama: opsi dengan ID berbeda dari label, custom single/multiple, urutan pilihan, field wajib kosong, false/0, kartu lama, dan hasil yang dilipat/bisa dibuka ulang.
+- Native InputObject membawa modifier Shift pada FocusLost tanpa event Shift terpisah. Kursor/seleksi yang direset saat blur dipulihkan; event ganda tidak menambah newline atau mengirim dua kali.
+- Always Approve menyetujui aksi saat ini, menyimpan preferensi saat reload, mengikuti switch Settings, dan mempertahankan izin tool serta Plan. Decline tetap berfungsi.
+- Question dan Provider Limit memakai viewport bounded dengan Close; countdown hidup saat dilipat dan panel recovered kembali ringkas. Tombol Question/persetujuan diperiksa pada lebar 300/440/760.
+- Agent menjalankan 64 putaran tool native, 210 build actions, dan 55 aksi structured tanpa budget jumlah/round. Stop melalui chat melepaskan task tanpa menjalankan aksi berikutnya.
+- Status batch tool memakai snapshot agar hasil tiap aksi tidak membangun ulang seluruh batch. Mock registry melepas instance yang telah dihancurkan agar lifecycle fixture mendekati engine.
+- 47 pemeriksaan tambahan lulus; total terbaru 776 tanpa warning. Bukti ringkas ada di [chat-controls-reproduction.json](../tests/reports/chat-controls-reproduction.json).
 
 ## Patch ikon, Sky dan Auto Retry
 
@@ -39,7 +50,7 @@ Tanggal verifikasi: 2026-10-11. Paket ini diuji secara lokal dengan data/account
 - Stream aktif melalui HTTP SSE lokal tetap berjalan melewati idle timeout; stream diam berhenti dan request berikutnya tetap dapat berjalan.
 - Bridge polling dan watchdog plugin memperbarui timer pada data/heartbeat upstream; polling kosong tidak mengunci UI.
 - EOF sebelum completion dilaporkan; actual agent mempertahankan teks parsial di samping error dan melepas run lock.
-- Agent menyelesaikan 13 tool rounds lalu jawaban akhir; batas output otomatis memakai continuation internal dan batas build mencegah tindakan berikutnya.
+- Agent menyelesaikan 13 tool rounds lalu jawaban akhir; batas output otomatis memakai continuation internal. Pengujian terbaru juga mencakup task tanpa budget jumlah tool/build dan Stop saat task masih berjalan.
 - Enter melalui fallback native mengirim chat; Shift+Enter lewat fallback menyisipkan satu newline. Event duplikat tidak mengirim dua kali dan draft sibuk tetap tersedia.
 - Detail pendek/panjang dapat dibuka/Close dengan viewport terbatas.
 - Resolver Roblox menerima path service/anak dotted dan slash; registry memakai resolusi yang konsisten.

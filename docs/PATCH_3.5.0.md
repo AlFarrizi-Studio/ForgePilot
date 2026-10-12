@@ -6,6 +6,11 @@ This patch keeps the release version at **3.5.0**. The ZIP contains rebuilt `plu
 
 | Area | Fix |
 | --- | --- |
+| Question answers | Save selected IDs, submit custom text with its payload, validate through the current question, and preserve false/zero answers. |
+| Chat disclosures | Compact Question/Provider Limit headers, bounded expansion, Close controls, answer/recovery folding, and live collapsed countdowns. |
+| Approval | Add Always Approve beside Approve and Decline; persist the preference and expose its switch in Settings → Agent. |
+| Shift+Enter | Read the Return event's Shift modifier, preserve cursor/selection through native focus loss, and avoid duplicate delivery. |
+| Tool/build counts | Remove numeric task/round caps from both protocols, settings, and prompts. Yield between actions/turns so Stop remains available. |
 | Provider editor | Keep diagnostic retry states separate from the current chat; restore buttons and text inputs after failed checks, Stop, and timeout. Show why configuration is locked during an active chat. |
 | Dropdown input | Close the shared menu and its dismissal layer when the owner is hidden, disabled, detached, destroyed, or the widget is closed. |
 | Diagnostic requests | Respect temporary one-attempt retry overrides and bounded request deadlines without changing saved chat preferences. |
@@ -25,6 +30,11 @@ This patch keeps the release version at **3.5.0**. The ZIP contains rebuilt `plu
 5. Reopen Studio. Avoid enabling a local copy and a Creator Store copy of ForgePilot at the same time.
 6. Open **Settings → Retry**. Existing settings are retained; enable Auto Retry and select **OpenCode** if desired.
 7. In **Settings → AI & Provider**, open a profile and run **Test connection**. After the check finishes or is stopped, verify **Back**, the editor tabs, text inputs, and **Save changes** respond. A failed check must not lock chat. During an active chat, the footer explains the temporary configuration lock.
+8. In chat, verify **Enter** sends and **Shift+Enter** adds a line. Open a Question, select or type an answer, and submit it; the answered result folds automatically. Open/Close a Provider Limit panel to inspect recovery.
+
+The approval card now offers **Approve**, **Decline**, and **Always Approve**. Always Approve saves the preference and approves the current action. Disable it in **Settings → Agent** to restore prompts. Plan mode and disabled tool permissions continue to determine which actions are available.
+
+Tool call/build action count settings are removed. Old saved values are discarded when settings load. Provider quotas, per-request limits, and output/context limits remain as documented.
 
 The installer copies the plugin; it does not publish a Creator Store update or replace a store copy through Roblox's update mechanism.
 
@@ -60,9 +70,12 @@ Native Roblox Studio, live provider accounts/OAuth, and Windows/macOS launcher e
 
 The provider-freeze regression runs with the production retry subscription enabled, including actual complete/stream diagnostics and an agent chat that recovers from HTTP 503. It also checks unrelated/stale retry events and shared dropdown cleanup. This covers two reproduced input-lock defects; verify the affected menu in native Studio after installing the rebuilt plugin.
 
+The chat-controls regression covers the real Question manager/widgets, approval persistence and reversal, native Return modifier events, responsive action rows, live provider folding, 64 native tool rounds, 210 build actions, structured actions, and Stop during an uncapped task.
+
 ## References
 
 - [Roblox Instance API](https://create.roblox.com/docs/reference/engine/classes/Instance): inheritance, properties, and tags.
 - [Roblox Sky API](https://create.roblox.com/docs/reference/engine/classes/Sky): Sky properties.
 - [Roblox asset URI reference](https://create.roblox.com/docs/projects/assets#rbxthumb): published asset thumbnails.
+- [Roblox TextBox API](https://create.roblox.com/docs/reference/engine/classes/TextBox) and [InputObject API](https://create.roblox.com/docs/reference/engine/classes/InputObject): native FocusLost input and modifier handling.
 - [OpenCode retry source](https://github.com/anomalyco/opencode/blob/c789868/packages/opencode/src/session/retry.ts): backoff, jitter, classification, and retry limits. ForgePilot adds bounded fallback waits, settings, bridge metadata, and cancellation.

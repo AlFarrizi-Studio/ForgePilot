@@ -2,6 +2,16 @@
 
 ## 3.5.0 — 2026-10-11
 
+### Chat controls patch — 2026-10-12
+
+- Fix single-choice state and submit original option IDs/custom payloads, so selected and typed answers resume the waiting task correctly. Preserve false/zero values and reject stale question submissions.
+- Add compact Question and Provider Limit disclosures with bounded expansion and Close. Answered questions and recovered providers collapse automatically; provider countdowns remain live when folded.
+- Add Approve, Decline, and Always Approve with responsive buttons. Save Always Approve and expose a synchronized switch in Settings → Agent.
+- Read Shift from the native Return InputObject, retain the caret through FocusLost, and deduplicate keyboard delivery. Enter sends; Shift+Enter inserts a new line.
+- Remove tool call, build action, and derived round budgets from defaults, Settings, system prompts, and both execution protocols. Yield between turns/actions so Stop remains responsive.
+- Publish tool status snapshots to avoid rebuilding a whole batch on every result. Verify 64 native tool rounds, 210 build actions, structured actions, and cancellation.
+- Retain version **3.5.0**. Add 47 checks; 776 Luau checks pass without warnings.
+
 ### Patch: provider menu freeze
 
 - Keep connection/capability diagnostics and unrelated retry events out of the agent state machine. Failed checks no longer leave provider settings locked.
@@ -27,7 +37,7 @@
 - Idle timeout across bridge, provider, and turn watchdog; partial-output recovery and explicit premature EOF.
 - Native Return submission fallback, Shift+Return newline, and Build default for new chats.
 - Collapsible bounded tool/reasoning details, completed icons, and missing-access setup hints.
-- Visible tool/build/output limits; up to three output continuations; consistent Roblox paths.
+- Visible provider/output limits; up to three output continuations; consistent Roblox paths. Tool/build count caps are removed in the latest patch.
 - Organized source, runtime, scripts by OS, tests, assets, and user/developer documentation.
 
 # Perubahan

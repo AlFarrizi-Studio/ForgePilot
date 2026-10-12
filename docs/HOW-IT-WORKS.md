@@ -34,7 +34,7 @@ Bridge memakai fetch streaming dan menyimpan event bercursor. Plugin membaca bat
 
 Idle timeout dimulai ulang setiap ada data upstream; polling lokal kosong tidak memperpanjangnya. Jadi jawaban aktif yang berlangsung lama tidak dipotong hanya karena lewat dua menit. Watchdog agent memiliki tambahan waktu cleanup dan menghormati durasi tunggu retry yang dijadwalkan.
 
-Jika koneksi ditutup tanpa marker selesai protokol, hasil parsial dipertahankan dan error ditampilkan. Jika provider memberi finish reason batas token, agent meminta kelanjutan sampai tiga kali. Putaran tambahan memakai konteks jawaban sebelumnya; kelanjutan teks yang tepat tetap bergantung pada model. Batas tool/build diperiksa sebelum tindakan berikutnya dan diberi pesan yang terlihat.
+Jika koneksi ditutup tanpa marker selesai protokol, hasil parsial dipertahankan dan error ditampilkan. Jika provider memberi finish reason batas token, agent meminta kelanjutan sampai tiga kali. Putaran tambahan memakai konteks jawaban sebelumnya; kelanjutan teks yang tepat tetap bergantung pada model. Jumlah tool call, build action, dan putaran tool tidak memakai budget task. Agent melanjutkan hingga selesai, Stop, atau error, serta memberikan giliran pada scheduler di antara aksi/putaran agar UI tetap merespons.
 
 ## Vision dan referensi
 

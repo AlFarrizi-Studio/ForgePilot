@@ -22,7 +22,9 @@ Repository: [AlFarrizi-Studio/ForgePilot](https://github.com/AlFarrizi-Studio/Fo
 - **Roblox tools.** Create and edit parts, models, terrain, Luau scripts, and GUI elements through validated tool calls.
 - **External tools through the bridge.** Search the web, fetch URLs, read and search local files, download files, edit files, and run terminal commands within the configured permissions.
 - **Provider choice.** The bundled 9router catalog contains 82 presets across OAuth, free/free-tier, and API key categories. Direct API and custom endpoint profiles are also available.
-- **Readable activity panels.** Thinking, tool calls, tool results, and web activity can be expanded or closed. Long results use a bounded scroll area.
+- **Readable activity panels.** Questions, provider limits, Thinking, tool calls, tool results, and web activity can be expanded or closed. Long results use a bounded scroll area.
+- **Approval choices.** Approve an action once, decline it, or choose Always Approve. The saved preference can be disabled in Settings → Agent.
+- **No task count caps.** Tool calls and build actions continue until the task finishes, is stopped, or encounters a blocking error.
 - **Provider logos and interface icons.** The package includes upstream provider images and native fallback icons for Thinking, Custom Provider, web, terminal, and tools.
 - **Keyboard controls.** Enter sends a chat message; Shift+Enter inserts a new line. The send button becomes Stop while the agent is working.
 - **Auto Retry.** Recover from temporary provider errors and interrupted streams, with a visible countdown, bounded retries, and an OpenCode preset. Open **Retry: On/Off** in chat to configure it.
@@ -129,6 +131,22 @@ Plugin API keys and bridge tokens are kept for the current plugin session. Non-s
 
 See the [provider guide](docs/PROVIDERS.md) for authentication flows, model selection, and capability checks.
 
+## Chat Controls
+
+| Control | Behavior |
+| --- | --- |
+| **Enter** | Send the current chat draft once, including existing line breaks. |
+| **Shift+Enter** | Insert a new line at the caret or replace the selected text. The draft stays in the composer. |
+| **Question** | Open the arrow, choose an option or enter an answer, then select **Submit answer**. Custom answers carry the actual text to the waiting task. |
+| **Answered question** | Collapse automatically. Reopen to read the prompt and answer; **Close** folds the result again. |
+| **Provider limit** | Start compact with a live countdown/status preview. Open the arrow for facts and retry controls; **Close** folds the panel while recovery continues. |
+| **Approve / Decline / Always Approve** | Approve once, reject once, or save automatic approval for enabled tools within the conversation's mode. |
+| **Stop** | Cancel an active task, including long sequences of tool calls or build actions. |
+
+**Always Approve** is off by default. Clicking it also approves the pending action. It persists across Studio sessions and can be turned off in **Settings → Agent → Always Approve** to restore confirmation prompts.
+
+ForgePilot has no numeric per-task cap on tool calls, build actions, or the number of tool rounds. Provider quotas, context/output limits, per-request timeouts, and the runtime limits listed in [Troubleshooting](docs/TROUBLESHOOTING.md) still apply.
+
 ## Auto Retry
 
 Auto Retry applies to both streaming and complete-response requests. Click **Retry: On/Off** beside **New chat**, or open **Settings → Retry**. The shortcut opens settings; the **Enable Auto Retry** switch controls whether requests are retried.
@@ -165,7 +183,7 @@ While a chat task is running, the provider footer explains that configuration is
 | 9router | Connects supported provider accounts and exposes their models through the local router API |
 | Local bridge | Relays streaming requests and executes available web, file, download, and terminal tools |
 
-For each turn, ForgePilot assembles the conversation, place context, selected mode, and tools that are actually available. It sends the request through the selected adapter and displays incoming text immediately. When the model requests a tool, the plugin validates its name, arguments, mode, and permissions, obtains any required confirmation, and returns the real result to the model. This loop continues until completion, cancellation, or a reported limit or error.
+For each turn, ForgePilot assembles the conversation, place context, selected mode, and tools that are actually available. It sends the request through the selected adapter and displays incoming text immediately. When the model requests a tool, the plugin validates its name, arguments, mode, and permissions, applies the approval preference, and returns the real result to the model. This loop continues until completion, cancellation, a provider output limit, or an error.
 
 Roblox actions run inside Studio. External actions run on your computer through the bridge. When the bridge is unavailable, the interface and AI receive setup guidance with a link to the [ForgePilot repository](https://github.com/AlFarrizi-Studio/ForgePilot).
 

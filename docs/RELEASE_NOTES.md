@@ -1,6 +1,12 @@
-# ForgePilot 3.5.0 — Provider Menu Fix, Icon & Auto Retry
+# ForgePilot 3.5.0 — Chat Controls, Provider Fix & Auto Retry
 
 Pembaruan ini tetap memakai versi **3.5.0**. Lihat [patch dan cara timpa](PATCH_3.5.0.md).
+
+- Pilihan dan jawaban kustom Question kini diteruskan dengan benar ke task yang menunggu; jawaban false/0 juga valid.
+- Question serta Provider Limit memiliki panah buka/tutup dan Close. Hasil jawaban otomatis dilipat; countdown provider tetap berjalan pada panel ringkas.
+- Approve, Decline, dan Always Approve tersedia. Always Approve tersimpan dan bisa dimatikan di Settings → Agent.
+- Shift+Enter memakai modifier event native Studio, menyisipkan newline pada kursor/seleksi, dan tidak mengirim chat. Enter tetap mengirim satu kali.
+- Batas jumlah Tool Calls, Build Actions, dan putaran tool dihapus dari runtime, pengaturan, dan prompt. Task memberi giliran pada UI agar Stop dapat digunakan selama aksi panjang.
 
 - Panel AI & Provider tidak lagi terkunci oleh status retry tes koneksi/capability. Tes gagal, Stop, dan timeout mengembalikan kontrol editor.
 - Lapisan dropdown dilepas ketika panel disembunyikan, dinonaktifkan, dipindahkan, dihancurkan, atau widget ditutup; klik tidak tertahan oleh overlay yang tertinggal.
@@ -17,7 +23,7 @@ Pembaruan ini tetap memakai versi **3.5.0**. Lihat [patch dan cara timpa](PATCH_
 - Installer hanya menyalin plugin ke folder Studio yang terdeteksi, dengan checksum dan backup.
 - Streaming memakai idle timeout; jawaban aktif tidak berhenti karena batas total dua menit.
 - Penutupan upstream sebelum completion ditampilkan sebagai error; teks parsial tetap tersedia. Output token yang terpotong dapat dilanjutkan otomatis sampai tiga kali.
-- Agent mengikuti batas tool/build yang diatur dengan penjelasan yang terlihat; batas tersembunyi 12 putaran dihapus.
+- Agent melanjutkan tool/build hingga selesai, dihentikan, atau terhalang error. Kuota provider, context/output, dan batas per request tetap berlaku.
 - Tool result, tool call, web activity, dan Thinking mempunyai kontrol expand/Close untuk hasil pendek maupun panjang.
 - Enter mengirim pesan; Shift+Enter menyisipkan newline, termasuk fallback submit Studio.
 - Chat baru memakai Build; Plan tersedia untuk perencanaan read-only.

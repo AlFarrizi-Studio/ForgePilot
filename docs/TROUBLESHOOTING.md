@@ -8,13 +8,23 @@ Versi ini memakai timeout berdasarkan tidak adanya data upstream. Teks/reasoning
 
 Jika output limit provider tercapai, agent melanjutkan sampai tiga kali. Setelah itu, kirim Continue atau naikkan Max Output Tokens sesuai batas model. Jika provider mengakhiri respons secara normal dengan stop/end_turn, plugin mengikuti marker itu; ia tidak dapat memastikan maksud model di luar completion tersebut.
 
-## Tool result atau Thinking terlalu panjang
+## Question, Provider Limit, tool result, atau Thinking terlalu panjang
 
 Gunakan panah pada header untuk membuka/menutup. Hasil pendek dan panjang memiliki kontrol yang sama. Saat terbuka, hasil panjang dibatasi pada area scroll; tombol Close di bawah menutup panel. Copy menyalin isi detail penuh yang tersedia.
 
-## Enter masih membuat paragraf
+Question dimulai ringkas. Buka panahnya, pilih opsi atau aktifkan Custom answer dan ketik jawaban, lalu Submit answer. Setelah diterima, hasil dilipat dan bisa dibaca ulang. Provider Limit tetap menampilkan countdown/status pada preview saat detailnya ditutup.
 
-Pastikan memakai RBXM 3.5.0 dan tidak ada plugin versi lama yang aktif. Composer Chat menggunakan submit Return bawaan Studio dengan fallback FocusLost; Shift+Enter menyisipkan newline sendiri. Kotak editor/provider lainnya tetap dapat memakai Enter sesuai fungsi masing-masing. Keyboard native/IME pada Studio nyata belum diuji dalam lingkungan rilis ini.
+## Question menolak opsi atau jawaban kustom
+
+Pasang plugin build terbaru dari ZIP 3.5.0. Patch ini memperbaiki state pilihan dan pengiriman jawaban kustom. Pilih opsi atau isi jawaban sebelum Submit; kolom wajib yang kosong tetap menampilkan pesan validasi tanpa mengunci input. Kartu lama yang sudah dijawab tidak bisa mengirim jawaban untuk pertanyaan baru.
+
+## Always Approve
+
+Pilih Always Approve pada kartu persetujuan untuk menyetujui aksi saat ini dan menyimpan preferensi. Matikan Settings → Agent → Always Approve untuk kembali meminta konfirmasi. Approve dan Decline hanya berlaku untuk aksi saat itu. Preferensi selalu mengikuti tool yang diaktifkan dan mode percakapan.
+
+## Enter atau Shift+Enter tidak sesuai
+
+Pastikan memakai RBXM 3.5.0 dari ZIP terbaru dan tidak ada plugin versi lama yang aktif. Composer memakai submit Return native Studio dan membaca modifier Shift dari InputObject pada InputBegan/FocusLost. Enter mengirim; Shift+Enter menyisipkan satu newline pada kursor atau seleksi dan mengembalikan fokus. Kotak editor/provider lainnya mengikuti fungsi masing-masing. Keyboard native/IME pada Studio nyata belum diuji langsung dalam lingkungan rilis ini.
 
 ## `No child named game.ServerScriptService`
 
@@ -55,7 +65,7 @@ Jangan menganggap endpoint contoh itu layanan publik yang sudah tersedia. Halama
 | Tool bridge | 310 detik; polling plugin memiliki batas 320 detik total untuk satu tool. |
 | Perintah terminal | 60 detik bawaan, maximum 300 detik, output dibatasi sekitar 60.000 karakter/byte. |
 | Startup router | 180 detik bawaan; parameter 1–600 detik. |
-| Tool/build per task | 40 tool call / 200 write action bawaan; dapat diatur di Settings → Agent. Pemeriksaan read tidak dihitung sebagai write. |
+| Jumlah tool/build per task | Tidak memakai batas jumlah tool call, build action, atau putaran tool. Berjalan hingga selesai, Stop, atau error. Batas per request dan kuota provider mengikuti baris lainnya. |
 | Kelanjutan output token | Maksimum 3 kelanjutan otomatis; tool arguments yang terpotong tidak dieksekusi. |
 | Download file | 64 MiB melalui bridge. |
 | Gambar bridge | 4 MiB per gambar; PNG/JPEG/WebP/GIF dengan signature file yang cocok. |
